@@ -1,0 +1,7 @@
+# Beispiel: Azure Storage CSI Driver Konfiguration
+
+global:
+  storage:
+    csiDriver: "disk.csi.azure.com"
+    volumePath: "/mnt/helmut"
+    volumeSize: "100Gi"

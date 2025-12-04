@@ -1,0 +1,66 @@
+{{- if .Values.global.storage }}
+---
+# Storage Class for CSI Driver
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.global.storage.storageClassName }}
+provisioner: {{ .Values.global.storage.csiDriver }}
+{{- if .Values.global.storage.volume.source }}
+parameters:
+  # SMB/NFS mount parameters
+  source: {{ .Values.global.storage.volume.source | quote }}
+  {{- if and (contains "smb" .Values.global.storage.csiDriver) .Values.credentials.storage.smb.username }}
+  # Reference SMB credentials secret
+  csi.storage.k8s.io/node-stage-secret-name: {{ include "helmut4.fullname" . }}-smb-credentials
+  csi.storage.k8s.io/node-stage-secret-namespace: {{ .Values.namespace }}
+  {{- end }}
+{{- end }}
+{{- if contains "smb" .Values.global.storage.csiDriver }}
+mountOptions:
+  - dir_mode=0777
+  - file_mode=0777
+  - uid=999
+  - gid=999
+  - noperm
+{{- end }}
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# PersistentVolumeClaim for Helmut shared storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: helmut-storage-pvc
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" . | nindent 4 }}
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {{ .Values.global.storage.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.global.storage.volume.size }}
+
+---
+# PersistentVolumeClaim for MongoDB backups
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-backup-pvc
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" . | nindent 4 }}
+    app: mongobackup
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.global.storage.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.global.storage.mongobackup.size }}
+{{- end }}

@@ -1,0 +1,190 @@
+[log]
+  level = "INFO"
+  format = "json"
+
+[api]
+  dashboard = true
+  insecure = false
+
+[entryPoints]
+  [entryPoints.web]
+    address = ":80"
+
+    [entryPoints.web.http]
+      [entryPoints.web.http.redirections]
+        [entryPoints.web.http.redirections.entryPoint]
+          to = "websecure"
+          scheme = "https"
+
+  [entryPoints.websecure]
+    address = ":443"
+
+[tls.stores]
+  [tls.stores.default]
+    [tls.stores.default.defaultCertificate]
+      certFile = "/certs/server.crt"
+      keyFile  = "/certs/server.key"
+
+[providers]
+  [providers.file]
+    directory = "/etc/traefik-ssl"
+    watch = false
+    filename = "traefik.toml"
+
+[http]
+  [http.routers]
+    [http.routers.fx]
+      rule = "PathPrefix(`/v1/fx`)"
+      service = "fx"
+      [http.routers.fx.tls]
+    [http.routers.co]
+      rule = "PathPrefix(`/v1/co`)"
+      service = "co"
+      [http.routers.co.tls]
+    [http.routers.io]
+      rule = "PathPrefix(`/v1/io`)"
+      service = "io"
+      [http.routers.io.tls]
+    [http.routers.hk]
+      rule = "PathPrefix(`/v1/hk`)"
+      service = "hk"
+      [http.routers.hk.tls]
+    [http.routers.members]
+      rule = "PathPrefix(`/v1/members`) || PathPrefix(`/v1/ws`)"
+      service = "members"
+      [http.routers.members.tls]
+    [http.routers.streams]
+      rule = "PathPrefix(`/v1/streams`) || PathPrefix(`/streamdesigner`)"
+      service = "streams"
+      [http.routers.streams.tls]
+    [http.routers.preferences]
+      rule = "PathPrefix(`/v1/preferences`)"
+      service = "preferences"
+      [http.routers.preferences.tls]
+    [http.routers.metadata]
+      rule = "PathPrefix(`/v1/metadata`)"
+      service = "metadata"
+      [http.routers.metadata.tls]
+    [http.routers.logging]
+      rule = "PathPrefix(`/v1/logging`)"
+      service = "logging"
+      [http.routers.logging.tls]
+    [http.routers.amqp]
+      rule = "PathPrefix(`/v1/amqp`)"
+      service = "amqp"
+      [http.routers.amqp.tls]
+    [http.routers.license]
+      rule = "PathPrefix(`/v1/license`) || PathPrefix(`/v1/client`)"
+      service = "license"
+      [http.routers.license.tls]
+    [http.routers.language]
+      rule = "PathPrefix(`/v1/language`)"
+      service = "language"
+      [http.routers.language.tls]
+    [http.routers.languages]
+      rule = "PathPrefix(`/v1/languages`)"
+      service = "language"
+      [http.routers.languages.tls]
+    [http.routers.cronjob]
+      rule = "PathPrefix(`/v1/cronjob`)"
+      service = "cronjob"
+      [http.routers.cronjob.tls]
+    [http.routers.rabbitmqWebstomp]
+      rule = "PathPrefix(`/ws`)"
+      service = "rabbitmqWebstomp"
+      [http.routers.rabbitmqWebstomp.tls]
+    [http.routers.panel]
+      rule = "PathPrefix(`/panel`)"
+      service = "hp"
+      [http.routers.panel.tls]
+
+    [http.routers.traefikDashboard]
+      rule = "PathPrefix(`/dashboard`) || PathPrefix(`/api`)"
+      middlewares = ["dashboardAuth"]
+      service = "api@internal"
+      [http.routers.traefikDashboard.tls]
+
+    [http.routers.mongoadmin]
+      rule = "PathPrefix(`/mongodb`)"
+      service = "mongoadmin"
+      [http.routers.mongoadmin.tls]
+
+    [http.routers.web]
+      rule = "PathPrefix(`/`)"
+      service = "hw"
+      [http.routers.web.tls]
+
+  [http.middlewares]
+    [http.middlewares.dashboardAuth]
+      [http.middlewares.dashboardAuth.basicAuth]
+        users = ["admin:$apr1$mkxb4wca$mpaQ8zRWDH0.0S5tA/2Un1"]
+
+  [http.services]
+    [http.services.fx]
+      [http.services.fx.loadBalancer]
+        [[http.services.fx.loadBalancer.servers]]
+          url = "http://fx:8100"
+    [http.services.co]
+      [http.services.co.loadBalancer]
+        [[http.services.co.loadBalancer.servers]]
+          url = "http://co:8101"
+    [http.services.io]
+      [http.services.io.loadBalancer]
+        [[http.services.io.loadBalancer.servers]]
+          url = "http://io:8102"
+    [http.services.hk]
+      [http.services.hk.loadBalancer]
+        [[http.services.hk.loadBalancer.servers]]
+          url = "http://hk:8103"
+    [http.services.members]
+      [http.services.members.loadBalancer]
+        [[http.services.members.loadBalancer.servers]]
+          url = "http://users:8000"
+    [http.services.streams]
+      [http.services.streams.loadBalancer]
+        [[http.services.streams.loadBalancer.servers]]
+          url = "http://streams:8001"
+    [http.services.preferences]
+      [http.services.preferences.loadBalancer]
+        [[http.services.preferences.loadBalancer.servers]]
+          url = "http://preferences:8002"
+    [http.services.metadata]
+      [http.services.metadata.loadBalancer]
+        [[http.services.metadata.loadBalancer.servers]]
+          url = "http://metadata:8003"
+    [http.services.logging]
+      [http.services.logging.loadBalancer]
+        [[http.services.logging.loadBalancer.servers]]
+          url = "http://logging:8004"
+    [http.services.amqp]
+      [http.services.amqp.loadBalancer]
+        [[http.services.amqp.loadBalancer.servers]]
+          url = "http://amqp:8005"
+    [http.services.license]
+      [http.services.license.loadBalancer]
+        [[http.services.license.loadBalancer.servers]]
+          url = "http://license:8006"
+    [http.services.language]
+      [http.services.language.loadBalancer]
+        [[http.services.language.loadBalancer.servers]]
+          url = "http://language:8007"
+    [http.services.cronjob]
+      [http.services.cronjob.loadBalancer]
+        [[http.services.cronjob.loadBalancer.servers]]
+          url = "http://cronjob:8008"
+    [http.services.rabbitmqWebstomp]
+      [http.services.rabbitmqWebstomp.loadBalancer]
+        [[http.services.rabbitmqWebstomp.loadBalancer.servers]]
+          url = "http://rabbitmq:15674"
+    [http.services.hw]
+      [http.services.hw.loadBalancer]
+        [[http.services.hw.loadBalancer.servers]]
+          url = "http://hw:8080"
+    [http.services.hp]
+      [http.services.hp.loadBalancer]
+        [[http.services.hp.loadBalancer.servers]]
+          url = "http://hp:8081"
+    [http.services.mongoadmin]
+      [http.services.mongoadmin.loadBalancer]
+        [[http.services.mongoadmin.loadBalancer.servers]]
+          url = "http://mongoadmin:8199"

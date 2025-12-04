@@ -1,0 +1,141 @@
+# Beispiel: Production Konfiguration
+# Verwenden Sie diese als Basis für Ihre Production-Deployment
+
+global:
+  domain: "api.production.com"
+  environment: "production"
+  registry: "repo.moovit24.de:443"
+  imagePullPolicy: IfNotPresent
+
+  storage:
+    csiDriver: "disk.csi.azure.com" # Anpassen nach Ihrer Infrastruktur
+    volumePath: "/mnt/helmut"
+    volumeSize: "500Gi"
+
+# RBAC aktiviert
+rbac:
+  create: true
+
+# Ingress Konfiguration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+  hosts:
+    - host: "api.production.com"
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: helmut4-tls-prod
+      hosts:
+        - "api.production.com"
+
+# Docker Registry - WICHTIG: Über Secrets setzen!
+docker:
+  registry: "repo.moovit24.de:443"
+  username: "" # Set via helm --set or environment
+  password: "" # Set via helm --set or environment
+  email: ""
+
+# MongoDB Production Konfiguration
+mongodb:
+  enabled: true
+  replicas: 3
+  image: "mcc_mongodb:4.2.0.0"
+  imageTag: "4.2.0.0"
+
+  storage:
+    size: "200Gi"
+    storageClassName: "fast-ssd" # High performance storage
+
+  auth:
+    rootUser: root
+    rootPassword: "***REMOVED***" # ÄNDERN IN PRODUCTION!
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: "4Gi"
+    limits:
+      cpu: "2"
+      memory: "8Gi"
+
+# RabbitMQ Production Konfiguration
+rabbitmq:
+  enabled: true
+  replicas: 3
+  image: "mcc_rabbitmq:4.1.0.0"
+  imageTag: "4.1.0.0"
+
+  storage:
+    size: "100Gi"
+    storageClassName: "fast-ssd"
+
+  auth:
+    defaultUser: root
+    defaultPassword: "***REMOVED***" # ÄNDERN IN PRODUCTION!
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+# Elasticsearch für Logging
+elasticsearch:
+  enabled: true
+  image: "docker.elastic.co/elasticsearch/elasticsearch:7.17.0"
+  imageTag: "7.17.0"
+
+  storage:
+    size: "100Gi"
+    storageClassName: "fast-ssd"
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+# Service Replicas - Production
+serviceReplicas: 3
+
+services:
+  hp:
+    replicas: 3
+  hw:
+    replicas: 3
+  fx:
+    replicas: 3
+  co:
+    replicas: 3
+  io:
+    replicas: 3
+  users:
+    replicas: 3
+  streams:
+    replicas: 3
+  preferences:
+    replicas: 2
+  metadata:
+    replicas: 2
+  logging:
+    replicas: 2
+  amqp:
+    replicas: 2
+  language:
+    replicas: 2
+
+# Backup Konfiguration
+mongobackup:
+  enabled: true
+  cronTime: "0 2 * * *" # Täglich um 2:00 Uhr
+  maxBackups: 30

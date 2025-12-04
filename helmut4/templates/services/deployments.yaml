@@ -1,0 +1,132 @@
+{{- $root := . }}
+{{- range $name, $service := .Values.services }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $service.name }}
+  namespace: {{ $root.Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" $root | nindent 4 }}
+    app: {{ $service.name }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ $service.name }}
+  ports:
+    {{- if $service.port }}
+    - port: {{ $service.port }}
+      targetPort: {{ $service.port }}
+      protocol: TCP
+      name: http
+    {{- end }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $service.name }}
+  namespace: {{ $root.Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" $root | nindent 4 }}
+    app: {{ $service.name }}
+spec:
+  replicas: {{ $service.replicas | default $root.Values.serviceReplicas }}
+  selector:
+    matchLabels:
+      app: {{ $service.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $service.name }}
+        {{- include "helmut4.labels" $root | nindent 8 }}
+    spec:
+      {{- if $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml $root.Values.global.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "helmut4.serviceAccountName" $root }}
+      
+      containers:
+        - name: {{ $service.name }}
+          image: "{{ $root.Values.global.registry }}/{{ $service.image }}:{{ $service.tag }}"
+          imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          {{- if $service.port }}
+          ports:
+            - containerPort: {{ $service.port }}
+              name: http
+              protocol: TCP
+          {{- end }}
+          
+          env:
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: password
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: password
+            - name: parameters
+              value: |
+                --spring.data.mongodb.host=mongodb-0.mongodb-headless
+                --spring.data.mongodb.port=27017
+                --spring.data.mongodb.username={{ $root.Values.mongodb.auth.rootUser }}
+                --spring.data.mongodb.password=$(MONGO_PASSWORD)
+                --spring.data.mongodb.authentication-database=admin
+                --spring.rabbitmq.host=rabbitmq-0.rabbitmq-headless
+                --spring.rabbitmq.port=5672
+                --spring.rabbitmq.username={{ $root.Values.rabbitmq.auth.defaultUser }}
+                --spring.rabbitmq.password=$(RABBITMQ_PASSWORD)
+                --spring.elasticsearch.rest.uris=http://elasticsearch:9200
+                --spring.elasticsearch.rest.timeout=2000
+                --mcc.fx.url=http://fx:{{ $root.Values.services.fx.port }}/v1/fx
+                --mcc.co.url=http://co:{{ $root.Values.services.co.port }}/v1/co
+                --mcc.io.url=http://io:{{ $root.Values.services.io.port }}/v1/io
+                --mcc.hk.url=http://hk:{{ $root.Values.services.hk.port }}/v1/hk
+                --mcc.users.url=http://users:{{ $root.Values.services.users.port }}/v1/members
+                --mcc.stream.url=http://streams:{{ $root.Values.services.streams.port }}/v1/streams
+                --mcc.preference.url=http://preferences:{{ $root.Values.services.preferences.port }}/v1/preferences
+                --mcc.metadata.url=http://metadata:{{ $root.Values.services.metadata.port }}/v1/metadata
+                --mcc.logging.url=http://logging:{{ $root.Values.services.logging.port }}/v1/logging/helmut
+                --mcc.amqp.url=http://amqp:{{ $root.Values.services.amqp.port }}/v1/amqp/send
+                --mcc.license.url=http://license:{{ $root.Values.services.license.port }}/v1/license
+                --mcc.language.url=http://language:{{ $root.Values.services.language.port }}/v1/language
+          
+          resources:
+            {{- toYaml $service.resources | nindent 12 }}
+          
+          {{- if $service.port }}
+          livenessProbe:
+            tcpSocket:
+              port: {{ $service.port }}
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          readinessProbe:
+            tcpSocket:
+              port: {{ $service.port }}
+              port: {{ $service.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{- end }}
+          
+          {{- if $service.volumeMounts }}
+          volumeMounts:
+            - name: helmut-storage
+              mountPath: {{ $.Values.global.storage.mountPath }}
+          {{- end }}
+      
+      {{- if $service.volumeMounts }}
+      volumes:
+        - name: helmut-storage
+          persistentVolumeClaim:
+            claimName: helmut-storage-pvc
+      {{- end }}
+{{- end }}

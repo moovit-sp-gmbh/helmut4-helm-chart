@@ -1,0 +1,488 @@
+# Image Versions - Centralized for easy updates
+versions:
+  mongodb: "4.0.7.2"
+  mongoadmin: "4.0.1.1"
+  mongobackup: "4.1.0.4"
+  elasticsearch: "7.17.0"
+  rabbitmq: "4.1.0.0"
+
+  # Microservices
+  hp: "4.10.0.1"
+  hw: "4.10.0.2"
+  fx: "4.10.0.1"
+  co: "4.10.0.1"
+  io: "4.10.0.1"
+  hk: "4.9.1.0"
+  users: "4.10.0.0"
+  streams: "4.10.0.7"
+  preferences: "4.9.1.0"
+  metadata: "4.9.2.0"
+  logging: "4.9.1.0"
+  amqp: "4.10.0.0"
+  license: "4.10.0.3"
+  language: "4.9.1.0"
+  cronjob: "4.9.1.0"
+
+# Storage Credentials - Centralized for easy management
+# Used by CSI drivers (SMB, NFS, etc.) to access external shares
+credentials:
+  storage:
+    # SMB Share Credentials
+    smb:
+      # Username for SMB authentication (e.g., domain\username or username)
+      username: ""
+      # Password for SMB authentication
+      password: ""
+      # Optional: SMB domain name
+      domain: ""
+
+    # NFS credentials (typically not needed for standard NFS, but some setups require it)
+    nfs:
+      # Leave empty for anonymous NFS access
+      username: ""
+      password: ""
+
+# Global settings
+global:
+  environment: "production"
+  # Docker registry configuration
+  registry: "repo.moovit24.de:443"
+  imagePullPolicy: IfNotPresent
+
+  # Image pull secrets for private registry
+  imagePullSecrets:
+    - name: docker-registry-secret-json
+
+  # Storage configuration
+  storage:
+    # CSI driver for mounting external storage (e.g., "smb.csi.k8s.io" for SMB, "nfs.csi.k8s.io" for NFS)
+    csiDriver: "csi-driver-name"
+
+    # Storage class configuration
+    storageClassName: "helmut4-csi-storage"
+
+    # Container mount point for Helmut storage
+    # This is where the storage will be mounted inside containers
+    mountPath: "/Volumes/Helmut"
+
+    # Main /Volumes storage
+    volume:
+      size: "100Gi"
+      # For SMB shares: //server/share or \\server\share
+      # For NFS shares: server:/path
+      # Leave empty to use dynamic provisioning
+      source: ""
+
+    # MongoDB backup storage
+    mongobackup:
+      size: "50Gi"
+      # External share source (SMB, NFS, etc.)
+      # Leave empty to use dynamic provisioning
+      source: ""
+
+# Namespace
+namespace: helmut4
+
+# RBAC
+rbac:
+  create: true
+  createNamespace: true # Set to false if namespace already exists
+
+# Service Account
+serviceAccount:
+  create: true
+  name: helmut4-sa
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+
+  # Main ingress domain - all services route through this domain
+  domain: "helmut-k8s.moovit24.de"
+
+  # TLS configuration
+  tls:
+    enabled: true
+    secretName: "helmut4-tls"
+
+    # Two options for TLS certificates:
+    # 1. Using Let's Encrypt (automatic via cert-manager) - set certIssuer
+    # 2. Using your own certificate - set provider: "custom" and provide certFile/keyFile
+
+    # Option 1: Let's Encrypt configuration
+    # Set certIssuer to use cert-manager (e.g., "letsencrypt-prod", "letsencrypt-staging")
+    certIssuer: "letsencrypt-prod"
+
+    # Option 2: Custom certificate configuration
+    provider: "letsencrypt" # Set to "custom" to use your own certificate
+
+    # For custom certificates, provide the paths to cert and key files
+    # These will be mounted from a Secret in the cluster
+    certFile: "/etc/tls/certs/tls.crt"
+    keyFile: "/etc/tls/certs/tls.key"
+
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+
+# Docker Registry Credentials
+docker:
+  registry: "repo.moovit24.de:443"
+  username: "moovit" # Standard username für public images
+  password: "public" # Standard password für public images
+  email: ""
+
+# MongoDB Configuration
+mongodb:
+  enabled: true
+  name: mongodb
+  replicas: 3
+  image: "mcc_mongodb"
+  imageTag: "4.0.7.2"
+
+  # Storage
+  storage:
+    size: "50Gi"
+    storageClassName: "helmut4-csi-storage"
+
+  # Authentication
+  auth:
+    rootUser: root
+    rootPassword: "***REMOVED***"
+
+  # Resources
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+  # Port
+  port: 27017
+
+# MongoDB Admin UI
+mongoadmin:
+  enabled: true
+  name: mongoadmin
+  image: "mcc_mongodb_admin"
+  imageTag: "4.0.1.1"
+  port: 8199
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+# MongoDB Backup
+mongobackup:
+  enabled: true
+  name: mongobackup
+  image: "mcc_mongodb_backup"
+  imageTag: "4.1.0.4"
+
+  # Backup schedule (cron format)
+  cronTime: "0 */4 * * *"
+  maxBackups: 180
+  initBackup: true
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+# Elasticsearch Configuration
+elasticsearch:
+  enabled: true
+  name: elasticsearch
+  image: "docker.elastic.co/elasticsearch/elasticsearch"
+  imageTag: "7.17.0"
+
+  # Storage
+  storage:
+    size: "30Gi"
+    storageClassName: "helmut4-csi-storage"
+
+  # Resources
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "2Gi"
+
+  # Port
+  port: 9200
+
+# RabbitMQ Configuration
+rabbitmq:
+  enabled: true
+  name: rabbitmq
+  replicas: 3
+  image: "mcc_rabbitmq"
+  imageTag: "4.1.0.0"
+
+  # Storage
+  storage:
+    size: "30Gi"
+    storageClassName: "helmut4-csi-storage"
+
+  # Authentication
+  auth:
+    defaultUser: root
+    defaultPassword: "***REMOVED***"
+
+  # Resources
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "2Gi"
+
+  # Ports
+  amqpPort: 5672
+  webstomp: 15674
+
+# Service replicas
+serviceReplicas: 2
+
+# Service versions and images
+services:
+  hp:
+    name: hp
+    image: mcp_hp
+    tag: "4.10.0.1"
+    port: 8081
+    replicas: 2
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  hw:
+    name: hw
+    image: mcp_hw
+    tag: "4.10.0.2"
+    port: 8080
+    replicas: 2
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  fx:
+    name: fx
+    image: mcp_fx
+    tag: "4.10.0.1"
+    port: 8100
+    replicas: 2
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+    volumeMounts: true
+
+  co:
+    name: co
+    image: mcp_co
+    tag: "4.10.0.1"
+    port: 8101
+    replicas: 2
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+    volumeMounts: true
+
+  io:
+    name: io
+    image: mcp_io
+    tag: "4.10.0.1"
+    port: 8102
+    replicas: 2
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+    volumeMounts: true
+
+  hk:
+    name: hk
+    image: mcp_hk
+    tag: "4.9.1.0"
+    port: 8103
+    replicas: 1
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+
+  users:
+    name: users
+    image: mcc_users
+    tag: "4.10.0.0"
+    port: 8000
+    replicas: 2
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+    volumeMounts: true
+
+  streams:
+    name: streams
+    image: mcc_streams
+    tag: "4.10.0.7"
+    port: 8001
+    replicas: 2
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+    volumeMounts: true
+
+  preferences:
+    name: preferences
+    image: mcc_preferences
+    tag: "4.9.1.0"
+    port: 8002
+    replicas: 2
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  metadata:
+    name: metadata
+    image: mcc_metadata
+    tag: "4.9.2.0"
+    port: 8003
+    replicas: 2
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  logging:
+    name: logging
+    image: mcc_logging
+    tag: "4.9.1.0"
+    port: 8004
+    replicas: 2
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  amqp:
+    name: amqp
+    image: mcc_amqp
+    tag: "4.10.0.0"
+    port: 8005
+    replicas: 2
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+
+  license:
+    name: license
+    image: mcc_license
+    tag: "4.10.0.3"
+    port: 8006
+    replicas: 1
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+    volumeMounts: true
+
+  language:
+    name: language
+    image: mcc_language
+    tag: "4.9.1.0"
+    port: 8007
+    replicas: 2
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+  cronjob:
+    name: cronjob
+    image: mcc_cronjob
+    tag: "4.9.1.0"
+    port: 8008
+    replicas: 1
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+# Environment configuration
+# These URLs are built dynamically but can be overridden
+environment:
+  mongodb_host: "mongodb-0.mongodb-headless:27017"
+  elasticsearch_uri: "http://elasticsearch:9200"
+  rabbitmq_host: "rabbitmq-0.rabbitmq-headless"
+
+# TLS Configuration
+tls:
+  enabled: true
+  certFile: "/etc/tls/certs/server.crt"
+  keyFile: "/etc/tls/certs/server.key"

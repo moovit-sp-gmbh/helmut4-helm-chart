@@ -1,0 +1,205 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "helmut4.fullname" . }}-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+    {{- if eq .Values.ingress.tls.provider "letsencrypt" }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.certIssuer | quote }}
+    {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.domain | quote }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  
+  rules:
+    - host: {{ .Values.ingress.domain | quote }}
+      http:
+        paths:
+          # fx service
+          - path: /v1/fx
+            pathType: Prefix
+            backend:
+              service:
+                name: fx
+                port:
+                  number: {{ .Values.services.fx.port }}
+          
+          # co service
+          - path: /v1/co
+            pathType: Prefix
+            backend:
+              service:
+                name: co
+                port:
+                  number: {{ .Values.services.co.port }}
+          
+          # io service
+          - path: /v1/io
+            pathType: Prefix
+            backend:
+              service:
+                name: io
+                port:
+                  number: {{ .Values.services.io.port }}
+          
+          # hk service
+          - path: /v1/hk
+            pathType: Prefix
+            backend:
+              service:
+                name: hk
+                port:
+                  number: {{ .Values.services.hk.port }}
+          
+          # users service - /v1/members and /v1/ws
+          - path: /v1/members
+            pathType: Prefix
+            backend:
+              service:
+                name: users
+                port:
+                  number: {{ .Values.services.users.port }}
+          
+          - path: /v1/ws
+            pathType: Prefix
+            backend:
+              service:
+                name: users
+                port:
+                  number: {{ .Values.services.users.port }}
+          
+          # streams service
+          - path: /v1/streams
+            pathType: Prefix
+            backend:
+              service:
+                name: streams
+                port:
+                  number: {{ .Values.services.streams.port }}
+          
+          - path: /streamdesigner
+            pathType: Prefix
+            backend:
+              service:
+                name: streams
+                port:
+                  number: {{ .Values.services.streams.port }}
+          
+          # preferences service
+          - path: /v1/preferences
+            pathType: Prefix
+            backend:
+              service:
+                name: preferences
+                port:
+                  number: {{ .Values.services.preferences.port }}
+          
+          # metadata service
+          - path: /v1/metadata
+            pathType: Prefix
+            backend:
+              service:
+                name: metadata
+                port:
+                  number: {{ .Values.services.metadata.port }}
+          
+          # logging service
+          - path: /v1/logging
+            pathType: Prefix
+            backend:
+              service:
+                name: logging
+                port:
+                  number: {{ .Values.services.logging.port }}
+          
+          # amqp service
+          - path: /v1/amqp
+            pathType: Prefix
+            backend:
+              service:
+                name: amqp
+                port:
+                  number: {{ .Values.services.amqp.port }}
+          
+          # license service
+          - path: /v1/license
+            pathType: Prefix
+            backend:
+              service:
+                name: license
+                port:
+                  number: {{ .Values.services.license.port }}
+          
+          - path: /v1/client
+            pathType: Prefix
+            backend:
+              service:
+                name: license
+                port:
+                  number: {{ .Values.services.license.port }}
+          
+          # language service
+          - path: /v1/language
+            pathType: Prefix
+            backend:
+              service:
+                name: language
+                port:
+                  number: {{ .Values.services.language.port }}
+          
+          - path: /v1/languages
+            pathType: Prefix
+            backend:
+              service:
+                name: language
+                port:
+                  number: {{ .Values.services.language.port }}
+          
+          # RabbitMQ WebStomp
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: rabbitmq
+                port:
+                  number: {{ .Values.rabbitmq.webstomp }}
+          
+          # MongoDB Admin UI
+          - path: /mongodb
+            pathType: Prefix
+            backend:
+              service:
+                name: mongoadmin
+                port:
+                  number: {{ .Values.mongoadmin.port }}
+          
+          # HP panel service
+          - path: /panel
+            pathType: Prefix
+            backend:
+              service:
+                name: hp
+                port:
+                  number: {{ .Values.services.hp.port }}
+          
+          # HW service - catch all remaining / routes
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hw
+                port:
+                  number: {{ .Values.services.hw.port }}
+{{- end }}
