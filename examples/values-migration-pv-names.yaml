@@ -1,0 +1,96 @@
+# Migration Configuration: Mount existing SMB/NFS shares
+# This allows you to reuse existing network shares when migrating from Docker Compose to Kubernetes
+
+# Storage Credentials - Set these before installing
+credentials:
+  storage:
+    smb:
+      username: "admin" # e.g., domain\username or just username
+      password: "your-password-here" # SMB password
+      domain: "" # Optional: WORKGROUP or DOMAIN
+    nfs:
+      username: "" # Leave empty for anonymous access
+      password: ""
+
+global:
+  domain: "example.com"
+  environment: "production"
+  registry: "repo.moovit24.de:443"
+  imagePullPolicy: IfNotPresent
+
+  imagePullSecrets:
+    - name: docker-registry-secret
+
+  storage:
+    # Use SMB CSI driver for SMB shares, NFS CSI for NFS, etc.
+    csiDriver: "smb.csi.k8s.io" # or "nfs.csi.k8s.io", "csi.ionos.com", etc.
+    storageClassName: "helmut4-csi-storage"
+
+    # Main /Volumes storage - mount existing share
+    volume:
+      size: "100Gi"
+      # SMB share example: //storage-server.example.com/helmut-volumes
+      # NFS share example: storage-server.example.com:/exports/helmut-volumes
+      source: "//storage-server.example.com/helmut-volumes"
+
+    # MongoDB backup storage - mount existing share
+    mongobackup:
+      size: "50Gi"
+      # SMB share example: //backup-server.example.com/mongodb-backups
+      # NFS share example: backup-server.example.com:/exports/mongodb-backups
+      source: "//backup-server.example.com/mongodb-backups"
+
+# Database configurations
+mongodb:
+  replicas: 3
+  auth:
+    rootUser: root
+    rootPassword: "your-password-here"
+
+rabbitmq:
+  replicas: 3
+  auth:
+    defaultUser: root
+    defaultPassword: "your-password-here"
+
+# Services with volume mounts for /Volumes
+services:
+  hp:
+    replicas: 2
+  hw:
+    replicas: 2
+  fx:
+    replicas: 2
+    volumeMounts: true
+  co:
+    replicas: 2
+    volumeMounts: true
+  io:
+    replicas: 2
+    volumeMounts: true
+  hk:
+    replicas: 1
+  users:
+    replicas: 2
+    volumeMounts: true
+  streams:
+    replicas: 2
+    volumeMounts: true
+  preferences:
+    replicas: 2
+  metadata:
+    replicas: 2
+  logging:
+    replicas: 2
+  amqp:
+    replicas: 2
+  license:
+    replicas: 1
+    volumeMounts: true
+  language:
+    replicas: 2
+  cronjob:
+    replicas: 1
+  xmlgenerator:
+    replicas: 1
+    volumeMounts: true

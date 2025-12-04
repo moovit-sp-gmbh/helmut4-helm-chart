@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-urls
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" . | nindent 4 }}
+data:
+  mongodb_host: "mongodb-0.mongodb-headless:27017"
+  elasticsearch_uri: "http://elasticsearch:9200"
+  rabbitmq_host: "rabbitmq-0.rabbitmq-headless"
+  rabbitmq_port: "5672"
+  
+  # Service URLs for microservices
+  fx_url: "http://fx:{{ .Values.services.fx.port }}/v1/fx"
+  co_url: "http://co:{{ .Values.services.co.port }}/v1/co"
+  io_url: "http://io:{{ .Values.services.io.port }}/v1/io"
+  hk_url: "http://hk:{{ .Values.services.hk.port }}/v1/hk"
+  users_url: "http://users:{{ .Values.services.users.port }}/v1/members"
+  streams_url: "http://streams:{{ .Values.services.streams.port }}/v1/streams"
+  preferences_url: "http://preferences:{{ .Values.services.preferences.port }}/v1/preferences"
+  metadata_url: "http://metadata:{{ .Values.services.metadata.port }}/v1/metadata"
+  logging_url: "http://logging:{{ .Values.services.logging.port }}/v1/logging/helmut"
+  amqp_url: "http://amqp:{{ .Values.services.amqp.port }}/v1/amqp/send"
+  license_url: "http://license:{{ .Values.services.license.port }}/v1/license"
+  language_url: "http://language:{{ .Values.services.language.port }}/v1/language"

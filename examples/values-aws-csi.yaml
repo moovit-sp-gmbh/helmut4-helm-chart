@@ -1,0 +1,7 @@
+# Beispiel: AWS EBS CSI Driver Konfiguration
+
+global:
+  storage:
+    csiDriver: "ebs.csi.aws.com"
+    volumePath: "/mnt/helmut"
+    volumeSize: "100Gi"

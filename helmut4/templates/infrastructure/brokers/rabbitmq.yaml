@@ -1,0 +1,205 @@
+{{- if .Values.rabbitmq.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-headless
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" . | nindent 4 }}
+    app: rabbitmq
+spec:
+  clusterIP: None
+  selector:
+    app: rabbitmq
+  ports:
+    - port: {{ .Values.rabbitmq.amqpPort }}
+      targetPort: {{ .Values.rabbitmq.amqpPort }}
+      protocol: TCP
+      name: amqp
+    - port: {{ .Values.rabbitmq.webstomp }}
+      targetPort: {{ .Values.rabbitmq.webstomp }}
+      protocol: TCP
+      name: webstomp
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" . | nindent 4 }}
+    app: rabbitmq
+spec:
+  type: ClusterIP
+  selector:
+    app: rabbitmq
+  ports:
+    - port: {{ .Values.rabbitmq.amqpPort }}
+      targetPort: {{ .Values.rabbitmq.amqpPort }}
+      protocol: TCP
+      name: amqp
+    - port: {{ .Values.rabbitmq.webstomp }}
+      targetPort: {{ .Values.rabbitmq.webstomp }}
+      protocol: TCP
+      name: webstomp
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" . | nindent 4 }}
+    app: rabbitmq
+spec:
+  serviceName: rabbitmq-headless
+  replicas: {{ .Values.rabbitmq.replicas }}
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+        {{- include "helmut4.labels" . | nindent 8 }}
+    spec:
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "helmut4.serviceAccountName" . }}
+      
+      containers:
+        - name: rabbitmq
+          image: "{{ .Values.global.registry }}/{{ .Values.rabbitmq.image }}:{{ .Values.rabbitmq.imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.rabbitmq.amqpPort }}
+              name: amqp
+              protocol: TCP
+            - containerPort: 15672
+              name: management
+              protocol: TCP
+            - containerPort: {{ .Values.rabbitmq.webstomp }}
+              name: webstomp
+              protocol: TCP
+          
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: {{ .Values.rabbitmq.auth.defaultUser }}
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: password
+            - name: RABBITMQ_ERLANG_COOKIE
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: erlang-cookie
+            - name: RABBITMQ_NODENAME
+              value: "rabbit@localhost"
+            - name: K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          
+          resources:
+            {{- toYaml .Values.rabbitmq.resources | nindent 12 }}
+          
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+            - name: config
+              mountPath: /etc/rabbitmq
+          
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.rabbitmq.amqpPort }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.rabbitmq.amqpPort }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+      
+      volumes:
+        - name: config
+          configMap:
+            name: rabbitmq-config
+        - name: data
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rabbitmq-secret
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" . | nindent 4 }}
+type: Opaque
+data:
+  password: {{ .Values.rabbitmq.auth.defaultPassword | b64enc }}
+  erlang-cookie: {{ randAlphaNum 32 | b64enc }}
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" . | nindent 4 }}
+    app: rabbitmq
+data:
+  rabbitmq.conf: |
+    ## Allow connections from any interface
+    listeners.tcp.default = {{ .Values.rabbitmq.amqpPort }}
+    
+    ## Enable management plugin
+    management.load_definitions = /etc/rabbitmq/definitions.json
+    
+    ## Clustering setup
+    cluster_partition_handling = autoheal
+    
+    ## Memory settings
+    vm_memory_high_watermark.relative = 0.6
+    
+    ## Disk space warning
+    disk_free_limit.absolute = 50MB
+    
+    ## Webstomp
+    web_mqtt.tcp.port = {{ .Values.rabbitmq.webstomp }}
+  
+  definitions.json: |
+    {
+      "vhosts": [
+        {"name": "/"}
+      ],
+      "users": [
+        {
+          "name": "{{ .Values.rabbitmq.auth.defaultUser }}",
+          "password": "${RABBITMQ_DEFAULT_PASS}",
+          "tags": "administrator"
+        }
+      ],
+      "permissions": [
+        {
+          "user": "{{ .Values.rabbitmq.auth.defaultUser }}",
+          "vhost": "/",
+          "configure": ".*",
+          "write": ".*",
+          "read": ".*"
+        }
+      ]
+    }
+{{- end }}

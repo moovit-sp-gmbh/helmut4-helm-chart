@@ -1,0 +1,108 @@
+# Beispiel: Development/Testing Konfiguration
+# Minimale Ressourcen für lokale Tests
+
+global:
+  domain: "localhost"
+  environment: "development"
+  registry: "repo.moovit24.de:443"
+  imagePullPolicy: IfNotPresent
+
+  storage:
+    csiDriver: "local.csi"
+    volumePath: "/mnt/helmut"
+    volumeSize: "50Gi"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  hosts:
+    - host: "localhost"
+      paths:
+        - path: /
+          pathType: Prefix
+
+# MongoDB Development
+mongodb:
+  replicas: 1 # Nur 1 Replica für Dev
+  storage:
+    size: "20Gi"
+    storageClassName: "standard"
+
+  auth:
+    rootPassword: "bitte"
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+
+# RabbitMQ Development
+rabbitmq:
+  replicas: 1
+  storage:
+    size: "10Gi"
+    storageClassName: "standard"
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+
+# Elasticsearch Development
+elasticsearch:
+  storage:
+    size: "20Gi"
+    storageClassName: "standard"
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+
+# Service Replicas - Development
+serviceReplicas: 1
+
+services:
+  hp:
+    replicas: 1
+  hw:
+    replicas: 1
+  fx:
+    replicas: 1
+  co:
+    replicas: 1
+  io:
+    replicas: 1
+  users:
+    replicas: 1
+  streams:
+    replicas: 1
+  preferences:
+    replicas: 1
+  metadata:
+    replicas: 1
+  logging:
+    replicas: 1
+  amqp:
+    replicas: 1
+  language:
+    replicas: 1
+  license:
+    replicas: 1
+  cronjob:
+    replicas: 1
+
+# Backup deaktiviert in Development
+mongobackup:
+  enabled: false
