@@ -1,8 +1,6 @@
 # Image Versions - Centralized for easy updates
 versions:
   mongodb: &mongodbVersion "4.0.7.2"
-  mongoadmin: &mongoadminVersion "4.0.1.1"
-  mongobackup: &mongobackupVersion "4.1.0.4"
   elasticsearch: &elasticsearchVersion "7.17.0"
   rabbitmq: &rabbitmqVersion "4.1.0.0"
 
@@ -70,13 +68,6 @@ global:
       size: "100Gi"
       # For SMB shares: //server/share or \\server\share
       # For NFS shares: server:/path
-      # Leave empty to use dynamic provisioning
-      source: ""
-
-    # MongoDB backup storage
-    mongobackup:
-      size: "50Gi"
-      # External share source (SMB, NFS, etc.)
       # Leave empty to use dynamic provisioning
       source: ""
 
@@ -159,42 +150,6 @@ mongodb:
   # Port
   port: 27017
 
-# MongoDB Admin UI
-mongoadmin:
-  enabled: true
-  name: mongoadmin
-  image: "mcc_mongodb_admin"
-  imageTag: *mongoadminVersion
-  port: 8199
-
-  resources:
-    requests:
-      cpu: "100m"
-      memory: "256Mi"
-    limits:
-      cpu: "500m"
-      memory: "512Mi"
-
-# MongoDB Backup
-mongobackup:
-  enabled: true
-  name: mongobackup
-  image: "mcc_mongodb_backup"
-  imageTag: *mongobackupVersion
-
-  # Backup schedule (cron format)
-  cronTime: "0 */4 * * *"
-  maxBackups: 180
-  initBackup: true
-
-  resources:
-    requests:
-      cpu: "100m"
-      memory: "256Mi"
-    limits:
-      cpu: "500m"
-      memory: "512Mi"
-
 # Elasticsearch Configuration
 elasticsearch:
   enabled: true
@@ -250,10 +205,6 @@ rabbitmq:
     limits:
       cpu: "2"
       memory: "2Gi"
-
-  service:
-    amqpPort: 5672
-    managementPort: 15672
 
 # Service replicas
 serviceReplicas: 2
