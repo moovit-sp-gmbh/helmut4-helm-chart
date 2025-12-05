@@ -62,10 +62,6 @@ global:
       size: "100Gi"
       # Bestehender SMB-Share (von Docker)
       source: "//storage-server.local/helmut-volumes"
-    
-    mongobackup:
-      size: "50Gi"
-      source: "//backup-server.local/mongodb-backups"
 ```
 
 ### Schritt 4: Helm installieren
@@ -84,7 +80,6 @@ helm install helmut4 helmut4/ \
 kubectl -n helmut4 get pvc
 # NAME                   STATUS  VOLUME              CAPACITY
 # helmut-storage-pvc     Bound   pvc-xxx             100Gi
-# mongodb-backup-pvc     Bound   pvc-yyy             50Gi
 
 # Pods mit Volume gemountet?
 kubectl -n helmut4 get pods -o wide
