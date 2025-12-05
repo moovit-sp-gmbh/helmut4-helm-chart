@@ -44,23 +44,4 @@ spec:
   resources:
     requests:
       storage: {{ .Values.global.storage.volume.size }}
-
----
-# PersistentVolumeClaim for MongoDB backups
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mongodb-backup-pvc
-  namespace: {{ .Values.namespace }}
-  labels:
-    {{- include "helmut4.labels" . | nindent 4 }}
-    app: mongobackup
-    component: storage
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: {{ .Values.global.storage.storageClassName }}
-  resources:
-    requests:
-      storage: {{ .Values.global.storage.mongobackup.size }}
 {{- end }}
