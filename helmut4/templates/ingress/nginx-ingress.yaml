@@ -176,15 +176,6 @@ spec:
                 port:
                   number: {{ .Values.rabbitmq.webstomp }}
           
-          # MongoDB Admin UI
-          - path: /mongodb
-            pathType: Prefix
-            backend:
-              service:
-                name: mongoadmin
-                port:
-                  number: {{ .Values.mongoadmin.port }}
-          
           # HP panel service
           - path: /panel
             pathType: Prefix
