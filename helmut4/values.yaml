@@ -1,27 +1,27 @@
 # Image Versions - Centralized for easy updates
 versions:
-  mongodb: "4.0.7.2"
-  mongoadmin: "4.0.1.1"
-  mongobackup: "4.1.0.4"
-  elasticsearch: "7.17.0"
-  rabbitmq: "4.1.0.0"
+  mongodb: &mongodbVersion "4.0.7.2"
+  mongoadmin: &mongoadminVersion "4.0.1.1"
+  mongobackup: &mongobackupVersion "4.1.0.4"
+  elasticsearch: &elasticsearchVersion "7.17.0"
+  rabbitmq: &rabbitmqVersion "4.1.0.0"
 
   # Microservices
-  hp: "4.10.0.1"
-  hw: "4.10.0.2"
-  fx: "4.10.0.1"
-  co: "4.10.0.1"
-  io: "4.10.0.1"
-  hk: "4.9.1.0"
-  users: "4.10.0.0"
-  streams: "4.10.0.7"
-  preferences: "4.9.1.0"
-  metadata: "4.9.2.0"
-  logging: "4.9.1.0"
-  amqp: "4.10.0.0"
-  license: "4.10.0.3"
-  language: "4.9.1.0"
-  cronjob: "4.9.1.0"
+  hp: &hpVersion "4.10.0.1"
+  hw: &hwVersion "4.10.0.2"
+  fx: &fxVersion "4.10.0.1"
+  co: &coVersion "4.10.0.1"
+  io: &ioVersion "4.10.0.1"
+  hk: &hkVersion "4.9.1.0"
+  users: &usersVersion "4.10.0.0"
+  streams: &streamsVersion "4.10.0.7"
+  preferences: &preferencesVersion "4.9.1.0"
+  metadata: &metadataVersion "4.9.2.0"
+  logging: &loggingVersion "4.9.1.0"
+  amqp: &amqpVersion "4.10.0.0"
+  license: &licenseVersion "4.10.0.3"
+  language: &languageVersion "4.9.1.1"
+  cronjob: &cronjobVersion "4.9.1.0"
 
 # Storage Credentials - Centralized for easy management
 # Used by CSI drivers (SMB, NFS, etc.) to access external shares
@@ -134,21 +134,18 @@ docker:
 
 # MongoDB Configuration
 mongodb:
-  enabled: true
-  name: mongodb
-  replicas: 3
-  image: "mcc_mongodb"
-  imageTag: "4.0.7.2"
+  fullnameOverride: "mongodb"
 
-  # Storage
-  storage:
-    size: "50Gi"
-    storageClassName: "helmut4-csi-storage"
-
-  # Authentication
   auth:
-    rootUser: root
+    rootUsername: "root"
     rootPassword: "bitte"
+
+  persistence:
+    enabled: true
+    size: "50Gi"
+    storageClass: "helmut4-csi-storage"
+
+  replicaCount: 1
 
   # Resources
   resources:
@@ -167,7 +164,7 @@ mongoadmin:
   enabled: true
   name: mongoadmin
   image: "mcc_mongodb_admin"
-  imageTag: "4.0.1.1"
+  imageTag: *mongoadminVersion
   port: 8199
 
   resources:
@@ -183,7 +180,7 @@ mongobackup:
   enabled: true
   name: mongobackup
   image: "mcc_mongodb_backup"
-  imageTag: "4.1.0.4"
+  imageTag: *mongobackupVersion
 
   # Backup schedule (cron format)
   cronTime: "0 */4 * * *"
@@ -203,7 +200,7 @@ elasticsearch:
   enabled: true
   name: elasticsearch
   image: "docker.elastic.co/elasticsearch/elasticsearch"
-  imageTag: "7.17.0"
+  imageTag: *elasticsearchVersion
 
   # Storage
   storage:
@@ -224,23 +221,28 @@ elasticsearch:
 
 # RabbitMQ Configuration
 rabbitmq:
-  enabled: true
-  name: rabbitmq
-  replicas: 3
-  image: "mcc_rabbitmq"
-  imageTag: "4.1.0.0"
+  fullnameOverride: "rabbitmq"
 
-  # Storage
-  storage:
-    size: "30Gi"
-    storageClassName: "helmut4-csi-storage"
-
-  # Authentication
   auth:
-    defaultUser: root
-    defaultPassword: "bitte"
+    username: "root"
+    password: "bitte"
+    erlangCookie: "secretcookie"
 
-  # Resources
+  # Webstomp configuration for Ingress
+  webstomp: 15674
+
+  additionalPlugins:
+    - rabbitmq_web_stomp
+
+  extraPorts:
+    - name: webstomp
+      port: 15674
+      targetPort: 15674
+      containerPort: 15674
+      protocol: TCP
+
+  replicaCount: 1
+
   resources:
     requests:
       cpu: "500m"
@@ -249,9 +251,9 @@ rabbitmq:
       cpu: "2"
       memory: "2Gi"
 
-  # Ports
-  amqpPort: 5672
-  webstomp: 15674
+  service:
+    amqpPort: 5672
+    managementPort: 15672
 
 # Service replicas
 serviceReplicas: 2
@@ -261,7 +263,7 @@ services:
   hp:
     name: hp
     image: mcp_hp
-    tag: "4.10.0.1"
+    tag: *hpVersion
     port: 8081
     replicas: 2
     resources:
@@ -275,7 +277,7 @@ services:
   hw:
     name: hw
     image: mcp_hw
-    tag: "4.10.0.2"
+    tag: *hwVersion
     port: 8080
     replicas: 2
     resources:
@@ -289,7 +291,7 @@ services:
   fx:
     name: fx
     image: mcp_fx
-    tag: "4.10.0.1"
+    tag: *fxVersion
     port: 8100
     replicas: 2
     resources:
@@ -304,7 +306,7 @@ services:
   co:
     name: co
     image: mcp_co
-    tag: "4.10.0.1"
+    tag: *coVersion
     port: 8101
     replicas: 2
     resources:
@@ -319,7 +321,7 @@ services:
   io:
     name: io
     image: mcp_io
-    tag: "4.10.0.1"
+    tag: *ioVersion
     port: 8102
     replicas: 2
     resources:
@@ -334,7 +336,7 @@ services:
   hk:
     name: hk
     image: mcp_hk
-    tag: "4.9.1.0"
+    tag: *hkVersion
     port: 8103
     replicas: 1
     resources:
@@ -348,7 +350,7 @@ services:
   users:
     name: users
     image: mcc_users
-    tag: "4.10.0.0"
+    tag: *usersVersion
     port: 8000
     replicas: 2
     resources:
@@ -363,7 +365,7 @@ services:
   streams:
     name: streams
     image: mcc_streams
-    tag: "4.10.0.7"
+    tag: *streamsVersion
     port: 8001
     replicas: 2
     resources:
@@ -378,7 +380,7 @@ services:
   preferences:
     name: preferences
     image: mcc_preferences
-    tag: "4.9.1.0"
+    tag: *preferencesVersion
     port: 8002
     replicas: 2
     resources:
@@ -392,7 +394,7 @@ services:
   metadata:
     name: metadata
     image: mcc_metadata
-    tag: "4.9.2.0"
+    tag: *metadataVersion
     port: 8003
     replicas: 2
     resources:
@@ -406,7 +408,7 @@ services:
   logging:
     name: logging
     image: mcc_logging
-    tag: "4.9.1.0"
+    tag: *loggingVersion
     port: 8004
     replicas: 2
     resources:
@@ -420,7 +422,7 @@ services:
   amqp:
     name: amqp
     image: mcc_amqp
-    tag: "4.10.0.0"
+    tag: *amqpVersion
     port: 8005
     replicas: 2
     resources:
@@ -434,7 +436,7 @@ services:
   license:
     name: license
     image: mcc_license
-    tag: "4.10.0.3"
+    tag: *licenseVersion
     port: 8006
     replicas: 1
     resources:
@@ -449,7 +451,7 @@ services:
   language:
     name: language
     image: mcc_language
-    tag: "4.9.1.0"
+    tag: *languageVersion
     port: 8007
     replicas: 2
     resources:
@@ -463,7 +465,7 @@ services:
   cronjob:
     name: cronjob
     image: mcc_cronjob
-    tag: "4.9.1.0"
+    tag: *cronjobVersion
     port: 8008
     replicas: 1
     resources:

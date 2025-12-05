@@ -87,13 +87,17 @@ spec:
               protocol: TCP
           
           env:
+            {{- if .Values.rabbitmq.auth.defaultUser }}
             - name: RABBITMQ_DEFAULT_USER
               value: {{ .Values.rabbitmq.auth.defaultUser }}
+            {{- end }}
+            {{- if .Values.rabbitmq.auth.defaultPassword }}
             - name: RABBITMQ_DEFAULT_PASS
               valueFrom:
                 secretKeyRef:
                   name: rabbitmq-secret
                   key: password
+            {{- end }}
             - name: RABBITMQ_ERLANG_COOKIE
               valueFrom:
                 secretKeyRef:
@@ -148,7 +152,9 @@ metadata:
     {{- include "helmut4.labels" . | nindent 4 }}
 type: Opaque
 data:
+  {{- if .Values.rabbitmq.auth.defaultPassword }}
   password: {{ .Values.rabbitmq.auth.defaultPassword | b64enc }}
+  {{- end }}
   erlang-cookie: {{ randAlphaNum 32 | b64enc }}
 
 ---
@@ -165,6 +171,9 @@ data:
     ## Allow connections from any interface
     listeners.tcp.default = {{ .Values.rabbitmq.amqpPort }}
     
+    ## Allow guest user from anywhere
+    loopback_users.guest = false
+
     ## Enable management plugin
     management.load_definitions = /etc/rabbitmq/definitions.json
     
@@ -186,13 +195,22 @@ data:
         {"name": "/"}
       ],
       "users": [
+        {{- if .Values.rabbitmq.auth.defaultUser }}
         {
           "name": "{{ .Values.rabbitmq.auth.defaultUser }}",
           "password": "${RABBITMQ_DEFAULT_PASS}",
           "tags": "administrator"
         }
+        {{- else }}
+        {
+          "name": "guest",
+          "password_hash": "BMh+E6gA1fMlWJ9Yc+U0jJ6s0l8=",
+          "tags": "administrator"
+        }
+        {{- end }}
       ],
       "permissions": [
+        {{- if .Values.rabbitmq.auth.defaultUser }}
         {
           "user": "{{ .Values.rabbitmq.auth.defaultUser }}",
           "vhost": "/",
@@ -200,6 +218,15 @@ data:
           "write": ".*",
           "read": ".*"
         }
+        {{- else }}
+        {
+          "user": "guest",
+          "vhost": "/",
+          "configure": ".*",
+          "write": ".*",
+          "read": ".*"
+        }
+        {{- end }}
       ]
     }
 {{- end }}
