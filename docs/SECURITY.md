@@ -50,7 +50,7 @@ kubectl set env statefulset/mongodb \
 ```bash
 # In values.yaml oder via helm set
 helm install helmut4 ./helmut4 \
-  --set rabbitmq.auth.defaultPassword="super-secure-password"
+  --set rabbitmq.auth.password="super-secure-password"
 ```
 
 ## 3. RBAC (Role-Based Access Control)
