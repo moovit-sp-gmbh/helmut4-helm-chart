@@ -11,8 +11,6 @@ A complete Helm chart for the Helmut4 microservices application with Kubernetes 
 - **Private Registry Credentials**: Docker Registry authentication integrated
 - **Configurable Values**: All important aspects manageable via `values.yaml`
 - **Elasticsearch Integration**: For logging services
-- **MongoDB Admin UI**: For managing the MongoDB database
-- **MongoDB Backup**: Automatic backups with configurable schedule
 
 ## Installation
 
@@ -91,9 +89,6 @@ global:
     volume:
       size: "100Gi"
       source: "//server/share"            # SMB: //server/share or NFS: server:/path
-    mongobackup:
-      size: "50Gi"
-      source: "//server/backup"
 
 # Credentials for SMB/NFS
 credentials:
@@ -216,16 +211,16 @@ mongodb:
 ### RabbitMQ Configuration
 
 ```yaml
+### RabbitMQ Configuration
+
+```yaml
 rabbitmq:
-  replicas: 3
-  storage:
+  replicaCount: 3
+  persistence:
     size: "50Gi"
   auth:
-    defaultPassword: "your-secure-password"
+    password: "your-secure-password"
 ```
-
-### Elasticsearch Configuration
-
 ```yaml
 elasticsearch:
   enabled: true
@@ -253,7 +248,6 @@ The chart automatically configures Nginx Ingress routes for all services:
 | `/v1/language`, `/v1/languages` | language | 8007 |
 | `/ws` | rabbitmq (webstomp) | 15674 |
 | `/panel` | hp | 8081 |
-| `/mongodb` | mongoadmin | 8199 |
 | `/` | hw | 8080 |
 
 ## Volumes and Storage
@@ -280,19 +274,11 @@ MongoDB uses StatefulSet with PVC for persistent data.
 MongoDB backups are written to a separate PVC.
 
 ## Monitoring and Logging
-
-### MongoDB Admin UI
-
-Access via: `https://your-domain.com/mongodb`
-
-Default credentials:
-- Username: `root`
-- Password: Configured in `mongodb.auth.rootPassword`
+## Monitoring and Logging
 
 ### Elasticsearch Logs
 
 Elasticsearch runs at `http://elasticsearch:9200` and stores logs from the logging service.
-
 ## Upgrade
 
 ```bash
