@@ -60,15 +60,53 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
-Get the registry URL
+MongoDB headless host (FQDN)
 */}}
-{{- define "helmut4.registry" -}}
-{{- .Values.global.registry }}
+{{- define "helmut4.mongodb.host" -}}
+{{- if .Values.mongodb.replicaSet.enabled }}
+{{- printf "%s-headless.%s.svc.cluster.local" (.Values.mongodb.fullnameOverride | default "mongodb") .Values.namespace }}
+{{- else }}
+{{- printf "%s.%s.svc.cluster.local" (.Values.mongodb.fullnameOverride | default "mongodb") .Values.namespace }}
+{{- end }}
 {{- end }}
 
 {{/*
-Get full image name
+RabbitMQ host (pod-0 of headless service, FQDN)
 */}}
-{{- define "helmut4.image" -}}
-{{- .Values.global.registry }}/{{ . }}
+{{- define "helmut4.rabbitmq.host" -}}
+{{- $name := .Values.rabbitmq.fullnameOverride | default "rabbitmq" }}
+{{- printf "%s-0.%s-headless.%s.svc.cluster.local" $name $name .Values.namespace }}
+{{- end }}
+
+{{/*
+MongoDB credentials secret name
+*/}}
+{{- define "helmut4.mongodb.secretName" -}}
+{{- if .Values.mongodb.auth.existingSecret -}}
+{{- .Values.mongodb.auth.existingSecret }}
+{{- else -}}
+mongodb-credentials
+{{- end }}
+{{- end }}
+
+{{/*
+MongoDB credentials username key
+*/}}
+{{- define "helmut4.mongodb.usernameKey" -}}
+{{- if .Values.mongodb.auth.existingSecret -}}
+{{- .Values.mongodb.auth.existingUsernameKey | default "username" }}
+{{- else -}}
+username
+{{- end }}
+{{- end }}
+
+{{/*
+MongoDB credentials password key
+*/}}
+{{- define "helmut4.mongodb.passwordKey" -}}
+{{- if .Values.mongodb.auth.existingSecret -}}
+{{- .Values.mongodb.auth.existingPasswordKey | default "mongodb-root-password" }}
+{{- else -}}
+password
+{{- end }}
 {{- end }}

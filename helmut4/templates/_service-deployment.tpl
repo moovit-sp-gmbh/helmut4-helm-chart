@@ -42,8 +42,6 @@ spec:
                 --spring.data.mongodb.port=27017
                 --spring.rabbitmq.host=rabbitmq-0.rabbitmq-headless
                 --spring.rabbitmq.port=5672
-                --spring.elasticsearch.rest.uris=http://elasticsearch:9200
-                --spring.elasticsearch.rest.timeout=2000
                 --mcc.fx.url=http://fx:{{ .Values.services.fx.port }}/v1/fx
                 --mcc.co.url=http://co:{{ .Values.services.co.port }}/v1/co
                 --mcc.io.url=http://io:{{ .Values.services.io.port }}/v1/io
