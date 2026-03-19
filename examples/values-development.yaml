@@ -30,10 +30,11 @@ docker:
   username: "moovit"
   password: "public"
 
-# MongoDB – standalone for dev (no replica set overhead)
+# MongoDB – single RS node for dev (cloudpirates chart requires RS mode for a valid StatefulSet)
 mongodb:
   replicaSet:
-    enabled: false
+    enabled: true
+  replicaCount: 1
   persistence:
     storageClass: "longhorn" # or "standard" / "local-path" for minikube/k3s
     size: "20Gi"
