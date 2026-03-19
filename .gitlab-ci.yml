@@ -80,12 +80,10 @@ kubeconform:
   stage: validate
   script:
     - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" dependency update "$CHART_DIR"
-    # Validate production values (the only fully correct configuration)
-    # Note: development values use replicaSet.enabled: false which causes the
-    # cloudpirates/mongodb chart to generate a StatefulSet without serviceName —
-    # a known chart bug. Only production is validated here.
     - docker run --rm --entrypoint sh -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" -c "helm template helmut4 $CHART_DIR -f examples/values-production.yaml > /workspace/rendered-prod.yaml"
     - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$KUBECONFORM_IMAGE" -ignore-missing-schemas -kubernetes-version 1.31.0 -summary /workspace/rendered-prod.yaml
+    - docker run --rm --entrypoint sh -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" -c "helm template helmut4 $CHART_DIR -f examples/values-development.yaml > /workspace/rendered-dev.yaml"
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$KUBECONFORM_IMAGE" -ignore-missing-schemas -kubernetes-version 1.31.0 -summary /workspace/rendered-dev.yaml
 
 # ---------------------------------------------------------------------------
 # Stage: security (informational - allow_failure: true)
