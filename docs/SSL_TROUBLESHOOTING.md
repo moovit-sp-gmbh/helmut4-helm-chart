@@ -31,7 +31,7 @@ kubectl get nodes -o wide
 Führe folgenden Befehl aus, um das Mapping hinzuzufügen (ersetze IP und Domain):
 
 ```bash
-kubectl patch deployment cert-manager -n cert-manager --type='json' -p='[{"op": "add", "path": "/spec/template/spec/hostAliases", "value": [{"ip": "10.10.10.46", "hostnames": ["hc-uploader-test.moovit24.de", "helmut-k8s.moovit24.de"]}]}]'
+kubectl patch deployment cert-manager -n cert-manager --type='json' -p='[{"op": "replace", "path": "/spec/template/spec/hostAliases", "value": [{"ip": "10.10.10.46", "hostnames": ["vulcano-test.moovit24.de", "vulcano-k8s.moovit24.de", "bildergarten.moovit24.de", "rtl.moovit24.de", "zdf.moovit24.de", "hc-uploader-test.moovit24.de", "helmut-k8s.moovit24.de", "helmut4-k8s.moovit24.de", "eu-central-1.hcu.hlmc.io", "eu-rc-1.hcu.hlmc.io", "eu-dev-1.hcu.hlmc.io"]}]}]'
 ```
 
 #### 3. Zertifikat neu anfordern
