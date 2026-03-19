@@ -53,12 +53,12 @@ yaml-lint:
 helm-lint:
   stage: lint
   script:
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" helm dependency build "$CHART_DIR"
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" helm lint "$CHART_DIR" --strict
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" helm lint "$CHART_DIR" -f examples/values-production.yaml --strict
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" helm lint "$CHART_DIR" -f examples/values-development.yaml --strict
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" helm lint "$CHART_DIR" -f examples/values-aws-csi.yaml --strict
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" helm lint "$CHART_DIR" -f examples/values-azure-csi.yaml --strict
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" dependency build "$CHART_DIR"
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" lint "$CHART_DIR" --strict
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" lint "$CHART_DIR" -f examples/values-production.yaml --strict
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" lint "$CHART_DIR" -f examples/values-development.yaml --strict
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" lint "$CHART_DIR" -f examples/values-aws-csi.yaml --strict
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" lint "$CHART_DIR" -f examples/values-azure-csi.yaml --strict
 
 # ---------------------------------------------------------------------------
 # Stage: validate
@@ -67,10 +67,10 @@ helm-lint:
 helm-template:
   stage: validate
   script:
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" helm dependency build "$CHART_DIR"
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" sh -c "helm template helmut4 $CHART_DIR > /workspace/rendered-default.yaml"
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" sh -c "helm template helmut4 $CHART_DIR -f examples/values-production.yaml > /workspace/rendered-production.yaml"
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" sh -c "helm template helmut4 $CHART_DIR -f examples/values-development.yaml > /workspace/rendered-development.yaml"
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" dependency build "$CHART_DIR"
+    - docker run --rm --entrypoint sh -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" -c "helm template helmut4 $CHART_DIR > /workspace/rendered-default.yaml"
+    - docker run --rm --entrypoint sh -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" -c "helm template helmut4 $CHART_DIR -f examples/values-production.yaml > /workspace/rendered-production.yaml"
+    - docker run --rm --entrypoint sh -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" -c "helm template helmut4 $CHART_DIR -f examples/values-development.yaml > /workspace/rendered-development.yaml"
   artifacts:
     paths:
       - rendered-*.yaml
@@ -79,11 +79,11 @@ helm-template:
 kubeconform:
   stage: validate
   script:
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" helm dependency build "$CHART_DIR"
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" dependency build "$CHART_DIR"
     # Render to file first, then validate (avoids cross-container pipes)
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" sh -c "helm template helmut4 $CHART_DIR -f examples/values-production.yaml > /workspace/rendered-prod.yaml"
+    - docker run --rm --entrypoint sh -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" -c "helm template helmut4 $CHART_DIR -f examples/values-production.yaml > /workspace/rendered-prod.yaml"
     - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$KUBECONFORM_IMAGE" -strict -ignore-missing-schemas -kubernetes-version 1.28.0 -summary /workspace/rendered-prod.yaml
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" sh -c "helm template helmut4 $CHART_DIR -f examples/values-development.yaml > /workspace/rendered-dev.yaml"
+    - docker run --rm --entrypoint sh -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" -c "helm template helmut4 $CHART_DIR -f examples/values-development.yaml > /workspace/rendered-dev.yaml"
     - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$KUBECONFORM_IMAGE" -strict -ignore-missing-schemas -kubernetes-version 1.28.0 -summary /workspace/rendered-dev.yaml
 
 # ---------------------------------------------------------------------------
@@ -93,8 +93,8 @@ kubeconform:
 kube-score:
   stage: security
   script:
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" helm dependency build "$CHART_DIR"
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" sh -c "helm template helmut4 $CHART_DIR -f examples/values-production.yaml > /workspace/rendered-score.yaml"
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" dependency build "$CHART_DIR"
+    - docker run --rm --entrypoint sh -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" -c "helm template helmut4 $CHART_DIR -f examples/values-production.yaml > /workspace/rendered-score.yaml"
     - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$KUBE_SCORE_IMAGE" score --ignore-test pod-probes --ignore-test container-image-tag /workspace/rendered-score.yaml
   allow_failure: true
 
@@ -111,9 +111,9 @@ checkov:
 package-chart:
   stage: package
   script:
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" helm dependency build "$CHART_DIR"
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" dependency build "$CHART_DIR"
     - mkdir -p dist
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" helm package "$CHART_DIR" --destination /workspace/dist
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" package "$CHART_DIR" --destination /workspace/dist
     - ls -la dist/
   artifacts:
     paths:
@@ -127,14 +127,14 @@ package-chart:
 push-to-registry:
   stage: package
   script:
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" helm dependency build "$CHART_DIR"
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" dependency build "$CHART_DIR"
     - mkdir -p dist
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" helm package "$CHART_DIR" --destination /workspace/dist
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_IMAGE" package "$CHART_DIR" --destination /workspace/dist
     - |
-      docker run --rm \
+      docker run --rm --entrypoint sh \
         -v "$CI_PROJECT_DIR:/workspace" -w /workspace \
         "$HELM_IMAGE" \
-        sh -c "helm registry login $HELM_REGISTRY_URL -u $HELM_REGISTRY_USER -p $HELM_REGISTRY_PASS \
+        -c "helm registry login $HELM_REGISTRY_URL -u $HELM_REGISTRY_USER -p $HELM_REGISTRY_PASS \
           && for chart in /workspace/dist/*.tgz; do helm push \"\$chart\" oci://$HELM_REGISTRY_URL; done"
   rules:
     - if: "$CI_COMMIT_TAG" # tags only
