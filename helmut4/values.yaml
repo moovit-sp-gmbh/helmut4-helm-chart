@@ -1,25 +1,24 @@
 # Image Versions - Centralized for easy updates
 versions:
-  mongodb: &mongodbVersion "4.0.7.2"
-  elasticsearch: &elasticsearchVersion "7.17.0"
+  mongodb: &mongodbVersion "4.12.0.0"
   rabbitmq: &rabbitmqVersion "4.1.0.0"
 
   # Microservices
-  hp: &hpVersion "4.10.0.1"
-  hw: &hwVersion "4.10.0.2"
-  fx: &fxVersion "4.10.0.1"
-  co: &coVersion "4.10.0.1"
-  io: &ioVersion "4.10.0.1"
-  hk: &hkVersion "4.9.1.0"
-  users: &usersVersion "4.10.0.0"
-  streams: &streamsVersion "4.10.0.7"
-  preferences: &preferencesVersion "4.9.1.0"
-  metadata: &metadataVersion "4.9.2.0"
-  logging: &loggingVersion "4.9.1.0"
-  amqp: &amqpVersion "4.10.0.0"
-  license: &licenseVersion "4.10.0.3"
-  language: &languageVersion "4.9.1.1"
-  cronjob: &cronjobVersion "4.9.1.0"
+  hp: &hpVersion "4.12.0.3"
+  hw: &hwVersion "4.12.0.3"
+  fx: &fxVersion "4.12.0.2"
+  co: &coVersion "4.12.0.6"
+  io: &ioVersion "4.12.0.1"
+  hk: &hkVersion "4.12.0.0"
+  users: &usersVersion "4.12.0.1"
+  streams: &streamsVersion "4.12.0.5"
+  preferences: &preferencesVersion "4.12.0.0"
+  metadata: &metadataVersion "4.12.0.0"
+  logging: &loggingVersion "4.12.0.0"
+  amqp: &amqpVersion "4.12.0.0"
+  license: &licenseVersion "4.12.0.3"
+  language: &languageVersion "4.12.0.0"
+  cronjob: &cronjobVersion "4.12.0.0"
 
 # Storage Credentials - Centralized for easy management
 # Used by CSI drivers (SMB, NFS, etc.) to access external shares
@@ -125,86 +124,104 @@ docker:
 
 # MongoDB Configuration
 mongodb:
+  enabled: true
   fullnameOverride: "mongodb"
+  database: "helmut4"
 
   auth:
     rootUsername: "root"
     rootPassword: "***REMOVED***"
+    # When existingSecret is set, no mongodb-credentials Secret is created by this chart.
+    # The MongoDB sub-chart creates a Secret named after fullnameOverride (e.g. "mongodb")
+    # with key "mongodb-root-password". Set existingSecret to reuse it directly.
+    existingSecret: ""
+    existingUsernameKey: ""
+    existingPasswordKey: "mongodb-root-password"
 
+  replicaSet:
+    enabled: true
+    name: "rs0"
+    key: "***REMOVED***="
+
+  # Persistent storage for MongoDB data.
+  # Use a block-storage class (e.g. Longhorn) – NOT the SMB share.
+  # SMB is a file-share and causes problems with MongoDB (locking, stale data on
+  # reinstall because the share is not wiped when PVCs are deleted).
   persistence:
     enabled: true
+    storageClass: "longhorn"
     size: "50Gi"
-    storageClass: "helmut4-csi-storage"
+    accessMode: ReadWriteOnce
 
-  replicaCount: 1
-
-  # Resources
   resources:
     requests:
-      cpu: "500m"
-      memory: "2Gi"
-    limits:
-      cpu: "2"
+      cpu: "4"
       memory: "4Gi"
-
-  # Port
-  port: 27017
-
-# Elasticsearch Configuration
-elasticsearch:
-  enabled: true
-  name: elasticsearch
-  image: "docker.elastic.co/elasticsearch/elasticsearch"
-  imageTag: *elasticsearchVersion
-
-  # Storage
-  storage:
-    size: "30Gi"
-    storageClassName: "helmut4-csi-storage"
-
-  # Resources
-  resources:
-    requests:
-      cpu: "500m"
-      memory: "1Gi"
     limits:
-      cpu: "2"
-      memory: "2Gi"
+      cpu: "8"
+      memory: "8Gi"
 
-  # Port
-  port: 9200
+  metrics:
+    enabled: false
+
+  # Chart-native extension point (documented in cloudpirates/mongodb README).
+  # In replicaSet mode the chart only creates the headless service (mongodb-headless).
+  # The microservice startup scripts perform a TCP health-check against "mongodb:27017"
+  # before Spring Boot starts.  We add a regular ClusterIP service via extraObjects so
+  # that name resolves – Spring Boot itself connects via SPRING_DATA_MONGODB_HOST which
+  # points to the headless service for full replica-set topology awareness.
+  extraObjects:
+    - apiVersion: v1
+      kind: Service
+      metadata:
+        name: mongodb
+        namespace: "{{ .Release.Namespace }}"
+      spec:
+        type: ClusterIP
+        selector:
+          app.kubernetes.io/name: mongodb
+          app.kubernetes.io/instance: "{{ .Release.Name }}"
+          service-type: primary-secondary
+        ports:
+          - port: 27017
+            targetPort: 27017
+            protocol: TCP
 
 # RabbitMQ Configuration
 rabbitmq:
   fullnameOverride: "rabbitmq"
+  replicaCount: 3
 
   auth:
     username: "root"
     password: "***REMOVED***"
     erlangCookie: "***REMOVED***"
+    existingErlangCookieKey: "erlang-cookie"
+    existingPasswordKey: "password"
+
+  peerDiscoveryK8sPlugin:
+    enabled: true
+    addressType: hostname
+
+  rbac:
+    create: true
+  serviceAccount:
+    create: true
+
+  service:
+    type: ClusterIP
+
+  persistence:
+    enabled: false
+
+  metrics:
+    enabled: false
 
   # Webstomp configuration for Ingress
   webstomp: 15674
 
   additionalPlugins:
     - rabbitmq_web_stomp
-
-  extraPorts:
-    - name: webstomp
-      port: 15674
-      targetPort: 15674
-      containerPort: 15674
-      protocol: TCP
-
-  replicaCount: 1
-
-  resources:
-    requests:
-      cpu: "500m"
-      memory: "1Gi"
-    limits:
-      cpu: "2"
-      memory: "2Gi"
 
 # Service replicas
 serviceReplicas: 2
@@ -426,16 +443,3 @@ services:
       limits:
         cpu: "1"
         memory: "1Gi"
-
-# Environment configuration
-# These URLs are built dynamically but can be overridden
-environment:
-  mongodb_host: "mongodb-0.mongodb-headless:27017"
-  elasticsearch_uri: "http://elasticsearch:9200"
-  rabbitmq_host: "rabbitmq-0.rabbitmq-headless"
-
-# TLS Configuration
-tls:
-  enabled: true
-  certFile: "/etc/tls/certs/server.crt"
-  keyFile: "/etc/tls/certs/server.key"
