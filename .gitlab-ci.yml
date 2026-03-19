@@ -1,15 +1,14 @@
 ---
 # GitLab CI/CD pipeline for the Helmut4 Helm chart
 #
-# Uses Docker-in-Docker (dind): every tool (helm, kubeconform, kube-score,
-# checkov, yamllint) runs via "docker run" - nothing needs to be installed
-# on the GitLab runner host.
+# Every tool (helm, kubeconform, kube-score, checkov, yamllint) is invoked
+# via "docker run" against the Docker daemon on the runner host.
 #
-# Runner requirements - register the runner once with Docker executor + privileged:
-#   gitlab-runner register \
-#     --executor docker \
-#     --docker-image docker:26 \
-#     --docker-privileged
+# Runner requirements:
+#   - Shell executor (gitlab-runner 13.x+)
+#   - Docker installed and running on the runner host
+#   - The gitlab-runner user must be in the "docker" group:
+#       sudo usermod -aG docker gitlab-runner
 #
 # Stages:
 #   lint     - YAML syntax + Helm lint
@@ -23,24 +22,7 @@ stages:
   - security
   - package
 
-# ---------------------------------------------------------------------------
-# Global defaults: every job runs inside docker:26, dind as a sidecar service.
-# ---------------------------------------------------------------------------
-default:
-  image: docker:26
-  services:
-    - name: docker:26-dind
-      alias: docker
-  before_script:
-    - docker info   # sanity-check that dind is reachable
-
 variables:
-  # dind TLS (required for docker:26-dind)
-  DOCKER_HOST: tcp://docker:2376
-  DOCKER_TLS_CERTDIR: "/certs"
-  DOCKER_TLS_VERIFY: "1"
-  DOCKER_CERT_PATH: "/certs/client"
-
   # Tool images - pin versions for reproducibility
   HELM_IMAGE: "alpine/helm:3.14.0"
   KUBECONFORM_IMAGE: "ghcr.io/yannh/kubeconform:v0.6.4-alpine"
@@ -54,6 +36,9 @@ variables:
   #   HELM_REGISTRY_URL   - OCI registry, e.g. registry.gitlab.com/yourgroup
   #   HELM_REGISTRY_USER  - registry username
   #   HELM_REGISTRY_PASS  - registry password / project token (masked)
+
+before_script:
+  - docker version # verify Docker is available on the runner host
 
 # ---------------------------------------------------------------------------
 # Stage: lint
@@ -139,9 +124,9 @@ package-chart:
       - dist/*.tgz
     expire_in: 7 days
   rules:
-    - if: "$CI_COMMIT_TAG"                  # automatically on version tags
+    - if: "$CI_COMMIT_TAG" # automatically on version tags
     - if: '$CI_COMMIT_BRANCH == "main"'
-      when: manual                          # manually from main branch
+      when: manual # manually from main branch
 
 push-to-registry:
   stage: package
@@ -156,7 +141,7 @@ push-to-registry:
         sh -c "helm registry login $HELM_REGISTRY_URL -u $HELM_REGISTRY_USER -p $HELM_REGISTRY_PASS \
           && for chart in /workspace/dist/*.tgz; do helm push \"\$chart\" oci://$HELM_REGISTRY_URL; done"
   rules:
-    - if: "$CI_COMMIT_TAG"                  # tags only
+    - if: "$CI_COMMIT_TAG" # tags only
   environment:
     name: helm-registry
   needs:
