@@ -1,26 +1,33 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: service-urls
+  name: service-config
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "helmut4.labels" . | nindent 4 }}
 data:
-  mongodb_host: "mongodb-0.mongodb-headless:27017"
-  elasticsearch_uri: "http://elasticsearch:9200"
-  rabbitmq_host: "rabbitmq-0.rabbitmq-headless"
-  rabbitmq_port: "5672"
-  
-  # Service URLs for microservices
-  fx_url: "http://fx:{{ .Values.services.fx.port }}/v1/fx"
-  co_url: "http://co:{{ .Values.services.co.port }}/v1/co"
-  io_url: "http://io:{{ .Values.services.io.port }}/v1/io"
-  hk_url: "http://hk:{{ .Values.services.hk.port }}/v1/hk"
-  users_url: "http://users:{{ .Values.services.users.port }}/v1/members"
-  streams_url: "http://streams:{{ .Values.services.streams.port }}/v1/streams"
-  preferences_url: "http://preferences:{{ .Values.services.preferences.port }}/v1/preferences"
-  metadata_url: "http://metadata:{{ .Values.services.metadata.port }}/v1/metadata"
-  logging_url: "http://logging:{{ .Values.services.logging.port }}/v1/logging/helmut"
-  amqp_url: "http://amqp:{{ .Values.services.amqp.port }}/v1/amqp/send"
-  license_url: "http://license:{{ .Values.services.license.port }}/v1/license"
-  language_url: "http://language:{{ .Values.services.language.port }}/v1/language"
+  # MongoDB (non-sensitive; credentials injected via Secret)
+  SPRING_DATA_MONGODB_HOST: {{ include "helmut4.mongodb.host" . | quote }}
+  SPRING_DATA_MONGODB_PORT: "27017"
+  SPRING_DATA_MONGODB_DATABASE: {{ .Values.mongodb.database | default "helmut4" | quote }}
+  SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE: "admin"
+  {{- if .Values.mongodb.replicaSet.enabled }}
+  SPRING_DATA_MONGODB_REPLICA_SET_NAME: {{ .Values.mongodb.replicaSet.name | quote }}
+  {{- end }}
+  # RabbitMQ (non-sensitive; password injected via Secret)
+  SPRING_RABBITMQ_HOST: {{ include "helmut4.rabbitmq.host" . | quote }}
+  SPRING_RABBITMQ_PORT: "5672"
+  SPRING_RABBITMQ_USERNAME: {{ .Values.rabbitmq.auth.username | quote }}
+  # Internal service URLs (Spring Boot relaxed-binding: MCC_FX_URL → mcc.fx.url)
+  MCC_FX_URL: "http://fx:{{ .Values.services.fx.port }}/v1/fx"
+  MCC_CO_URL: "http://co:{{ .Values.services.co.port }}/v1/co"
+  MCC_IO_URL: "http://io:{{ .Values.services.io.port }}/v1/io"
+  MCC_HK_URL: "http://hk:{{ .Values.services.hk.port }}/v1/hk"
+  MCC_USERS_URL: "http://users:{{ .Values.services.users.port }}/v1/members"
+  MCC_STREAM_URL: "http://streams:{{ .Values.services.streams.port }}/v1/streams"
+  MCC_PREFERENCE_URL: "http://preferences:{{ .Values.services.preferences.port }}/v1/preferences"
+  MCC_METADATA_URL: "http://metadata:{{ .Values.services.metadata.port }}/v1/metadata"
+  MCC_LOGGING_URL: "http://logging:{{ .Values.services.logging.port }}/v1/logging/helmut"
+  MCC_AMQP_URL: "http://amqp:{{ .Values.services.amqp.port }}/v1/amqp/send"
+  MCC_LICENSE_URL: "http://license:{{ .Values.services.license.port }}/v1/license"
+  MCC_LANGUAGE_URL: "http://language:{{ .Values.services.language.port }}/v1/language"
