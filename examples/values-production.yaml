@@ -1,128 +1,108 @@
-# Beispiel: Production Konfiguration
-# Verwenden Sie diese als Basis für Ihre Production-Deployment
+# Example: Production Configuration
+# Use this as a base for production deployments.
+# IMPORTANT: Replace all CHANGE_ME placeholders before deploying!
 
 global:
-  domain: "api.production.com"
   environment: "production"
   registry: "repo.moovit24.de:443"
   imagePullPolicy: IfNotPresent
-
+  imagePullSecrets:
+    - name: docker-registry-secret-json
   storage:
-    csiDriver: "disk.csi.azure.com" # Anpassen nach Ihrer Infrastruktur
-    volumePath: "/mnt/helmut"
-    volumeSize: "500Gi"
+    csiDriver: "smb.csi.k8s.io" # adjust: ebs.csi.aws.com / disk.csi.azure.com etc.
+    storageClassName: "helmut4-csi-storage"
+    mountPath: "/Volumes/Helmut"
+    volume:
+      size: "500Gi"
+      source: "//storage-server.example.com/helmut"
+    mongobackup:
+      size: "100Gi"
+      source: "//backup-server.example.com/helmut-backups"
 
-# RBAC aktiviert
+credentials:
+  storage:
+    smb:
+      username: "CHANGE_ME"
+      password: "CHANGE_ME"
+      domain: ""
+
 rbac:
   create: true
 
-# Ingress Konfiguration
 ingress:
   enabled: true
   className: "nginx"
+  domain: "helmut.example.com"
+  tls:
+    enabled: true
+    provider: "letsencrypt"
+    certIssuer: "letsencrypt-prod"
   annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-  hosts:
-    - host: "api.production.com"
-      paths:
-        - path: /
-          pathType: Prefix
-  tls:
-    - secretName: helmut4-tls-prod
-      hosts:
-        - "api.production.com"
 
-# Docker Registry - WICHTIG: Über Secrets setzen!
 docker:
   registry: "repo.moovit24.de:443"
-  username: "" # Set via helm --set or environment
-  password: "" # Set via helm --set or environment
-  email: ""
+  username: "moovit"
+  password: "public"
 
-# MongoDB Production Konfiguration
+# MongoDB – 3-node Replica Set on Longhorn block storage
+# Do NOT use the SMB share for MongoDB data.
 mongodb:
-  enabled: true
-  replicas: 3
-  image: "mcc_mongodb:4.2.0.0"
-  imageTag: "4.2.0.0"
-
-  storage:
-    size: "200Gi"
-    storageClassName: "fast-ssd" # High performance storage
-
+  replicaSet:
+    enabled: true
+    name: "rs0"
+    key: "CHANGE_ME_BASE64_6_TO_1024_CHARS"
+    secondaries: 2
+  persistence:
+    storageClass: "longhorn" # or fast-ssd / managed-premium etc.
+    size: "100Gi"
   auth:
-    rootUser: root
-    rootPassword: "bitte" # ÄNDERN IN PRODUCTION!
-
+    rootUsername: "root"
+    rootPassword: "CHANGE_ME"
   resources:
     requests:
-      cpu: "1"
+      cpu: "2"
       memory: "4Gi"
     limits:
-      cpu: "2"
+      cpu: "4"
       memory: "8Gi"
 
-# RabbitMQ Production Konfiguration
+# RabbitMQ – 3-node cluster
 rabbitmq:
-  enabled: true
-  replicas: 3
-  image: "mcc_rabbitmq:4.1.0.0"
-  imageTag: "4.1.0.0"
-
-  storage:
-    size: "100Gi"
-    storageClassName: "fast-ssd"
-
+  replicaCount: 3
   auth:
-    defaultUser: root
-    defaultPassword: "bitte" # ÄNDERN IN PRODUCTION!
-
+    username: "root"
+    password: "CHANGE_ME"
+    erlangCookie: "CHANGE_ME"
   resources:
     requests:
-      cpu: "1"
-      memory: "2Gi"
+      cpu: "500m"
+      memory: "1Gi"
     limits:
       cpu: "2"
-      memory: "4Gi"
-
-# Elasticsearch für Logging
-elasticsearch:
-  enabled: true
-  image: "docker.elastic.co/elasticsearch/elasticsearch:7.17.0"
-  imageTag: "7.17.0"
-
-  storage:
-    size: "100Gi"
-    storageClassName: "fast-ssd"
-
-  resources:
-    requests:
-      cpu: "1"
       memory: "2Gi"
-    limits:
-      cpu: "2"
-      memory: "4Gi"
 
-# Service Replicas - Production
-serviceReplicas: 3
+# 2 replicas per microservice
+serviceReplicas: 2
 
 services:
   hp:
-    replicas: 3
+    replicas: 2
   hw:
-    replicas: 3
+    replicas: 2
   fx:
-    replicas: 3
+    replicas: 2
   co:
-    replicas: 3
+    replicas: 2
   io:
-    replicas: 3
+    replicas: 2
+  hk:
+    replicas: 1
   users:
-    replicas: 3
+    replicas: 2
   streams:
-    replicas: 3
+    replicas: 2
   preferences:
     replicas: 2
   metadata:
@@ -131,11 +111,9 @@ services:
     replicas: 2
   amqp:
     replicas: 2
+  license:
+    replicas: 1
   language:
     replicas: 2
-
-# Backup Konfiguration
-mongobackup:
-  enabled: true
-  cronTime: "0 2 * * *" # Täglich um 2:00 Uhr
-  maxBackups: 30
+  cronjob:
+    replicas: 1
