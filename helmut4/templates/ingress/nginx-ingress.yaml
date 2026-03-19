@@ -107,6 +107,14 @@ spec:
                   number: {{ .Values.services.preferences.port }}
           
           # metadata service
+          - path: /v1/metadataSet
+            pathType: Prefix
+            backend:
+              service:
+                name: metadata
+                port:
+                  number: {{ .Values.services.metadata.port }}
+
           - path: /v1/metadata
             pathType: Prefix
             backend:
