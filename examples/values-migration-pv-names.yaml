@@ -1,59 +1,70 @@
-# Migration Configuration: Mount existing SMB/NFS shares
-# This allows you to reuse existing network shares when migrating from Docker Compose to Kubernetes
+# Migration Configuration: Reuse existing PersistentVolumes by name
+# Use when PVs already exist in the cluster (e.g. pre-provisioned by ops team)
+# and you want to bind to them by name instead of dynamic provisioning.
 
-# Storage Credentials - Set these before installing
 credentials:
   storage:
     smb:
-      username: "admin" # e.g., domain\username or just username
-      password: "your-password-here" # SMB password
-      domain: "" # Optional: WORKGROUP or DOMAIN
-    nfs:
-      username: "" # Leave empty for anonymous access
-      password: ""
+      username: "admin"       # e.g. domain\username or just username
+      password: "CHANGE_ME"   # SMB password
+      domain: ""              # Optional: WORKGROUP or DOMAIN
 
 global:
-  domain: "example.com"
   environment: "production"
   registry: "repo.moovit24.de:443"
   imagePullPolicy: IfNotPresent
-
   imagePullSecrets:
-    - name: docker-registry-secret
-
+    - name: docker-registry-secret-json
   storage:
-    # Use SMB CSI driver for SMB shares, NFS CSI for NFS, etc.
-    csiDriver: "smb.csi.k8s.io" # or "nfs.csi.k8s.io", "csi.ionos.com", etc.
+    csiDriver: "smb.csi.k8s.io"  # or nfs.csi.k8s.io etc.
     storageClassName: "helmut4-csi-storage"
-
-    # Main /Volumes storage - mount existing share
+    mountPath: "/Volumes/Helmut"
     volume:
       size: "100Gi"
-      # SMB share example: //storage-server.example.com/helmut-volumes
-      # NFS share example: storage-server.example.com:/exports/helmut-volumes
       source: "//storage-server.example.com/helmut-volumes"
-
-    # MongoDB backup storage - mount existing share
     mongobackup:
       size: "50Gi"
-      # SMB share example: //backup-server.example.com/mongodb-backups
-      # NFS share example: backup-server.example.com:/exports/mongodb-backups
       source: "//backup-server.example.com/mongodb-backups"
 
-# Database configurations
+rbac:
+  create: true
+
+ingress:
+  enabled: true
+  className: "nginx"
+  domain: "helmut.example.com"
+  tls:
+    enabled: true
+    provider: "letsencrypt"
+    certIssuer: "letsencrypt-prod"
+
+docker:
+  registry: "repo.moovit24.de:443"
+  username: "moovit"
+  password: "public"
+
+# MongoDB - Replica Set, data on Longhorn (NOT on the SMB share)
 mongodb:
-  replicas: 3
+  replicaSet:
+    enabled: true
+    name: "rs0"
+    key: "CHANGE_ME_BASE64_6_TO_1024_CHARS"
+  persistence:
+    storageClass: "longhorn"
+    size: "50Gi"
   auth:
-    rootUser: root
-    rootPassword: "your-password-here"
+    rootUsername: "root"
+    rootPassword: "CHANGE_ME"
 
 rabbitmq:
-  replicas: 3
+  replicaCount: 3
   auth:
-    defaultUser: root
-    defaultPassword: "your-password-here"
+    username: "root"
+    password: "CHANGE_ME"
+    erlangCookie: "CHANGE_ME"
 
-# Services with volume mounts for /Volumes
+serviceReplicas: 2
+
 services:
   hp:
     replicas: 2
@@ -61,21 +72,16 @@ services:
     replicas: 2
   fx:
     replicas: 2
-    volumeMounts: true
   co:
     replicas: 2
-    volumeMounts: true
   io:
     replicas: 2
-    volumeMounts: true
   hk:
     replicas: 1
   users:
     replicas: 2
-    volumeMounts: true
   streams:
     replicas: 2
-    volumeMounts: true
   preferences:
     replicas: 2
   metadata:
@@ -86,11 +92,7 @@ services:
     replicas: 2
   license:
     replicas: 1
-    volumeMounts: true
   language:
     replicas: 2
   cronjob:
     replicas: 1
-  xmlgenerator:
-    replicas: 1
-    volumeMounts: true

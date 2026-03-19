@@ -1,7 +1,30 @@
-# Beispiel: Azure Storage CSI Driver Konfiguration
+# Example: Azure Disk CSI Driver
+# Use for deployments on Azure AKS
 
 global:
   storage:
     csiDriver: "disk.csi.azure.com"
-    volumePath: "/mnt/helmut"
-    volumeSize: "100Gi"
+    storageClassName: "helmut4-csi-storage"
+    mountPath: "/Volumes/Helmut"
+    volume:
+      size: "100Gi"
+      source: "" # Not used with Azure Disk – dynamic provisioning
+
+# MongoDB on a dedicated block-storage class (Azure Premium SSD recommended)
+mongodb:
+  persistence:
+    storageClass: "managed-premium" # adjust to your Azure StorageClass
+    size: "50Gi"
+  auth:
+    rootUsername: "root"
+    rootPassword: "CHANGE_ME"
+  replicaSet:
+    enabled: true
+    name: "rs0"
+    key: "CHANGE_ME_BASE64_6_TO_1024_CHARS"
+
+rabbitmq:
+  auth:
+    username: "root"
+    password: "CHANGE_ME"
+    erlangCookie: "CHANGE_ME"

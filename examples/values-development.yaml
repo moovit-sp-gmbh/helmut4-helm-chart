@@ -1,38 +1,45 @@
-# Beispiel: Development/Testing Konfiguration
-# Minimale Ressourcen für lokale Tests
+# Example: Development / Local Testing
+# Minimal resources, no TLS, single replicas, Longhorn for MongoDB.
 
 global:
-  domain: "localhost"
   environment: "development"
   registry: "repo.moovit24.de:443"
   imagePullPolicy: IfNotPresent
-
   storage:
-    csiDriver: "local.csi"
-    volumePath: "/mnt/helmut"
-    volumeSize: "50Gi"
+    csiDriver: "smb.csi.k8s.io"
+    storageClassName: "helmut4-csi-storage"
+    mountPath: "/Volumes/Helmut"
+    volume:
+      size: "50Gi"
+      source: "//storage-server.local/helmut-dev"
+
+rbac:
+  create: true
 
 ingress:
   enabled: true
   className: "nginx"
+  domain: "helmut.local"
+  tls:
+    enabled: false
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
-  hosts:
-    - host: "localhost"
-      paths:
-        - path: /
-          pathType: Prefix
 
-# MongoDB Development
+docker:
+  registry: "repo.moovit24.de:443"
+  username: "moovit"
+  password: "public"
+
+# MongoDB – standalone for dev (no replica set overhead)
 mongodb:
-  replicas: 1 # Nur 1 Replica für Dev
-  storage:
+  replicaSet:
+    enabled: false
+  persistence:
+    storageClass: "longhorn" # or "standard" / "local-path" for minikube/k3s
     size: "20Gi"
-    storageClassName: "standard"
-
   auth:
-    rootPassword: "***REMOVED***"
-
+    rootUsername: "root"
+    rootPassword: "dev-password"
   resources:
     requests:
       cpu: "250m"
@@ -41,13 +48,13 @@ mongodb:
       cpu: "500m"
       memory: "1Gi"
 
-# RabbitMQ Development
+# RabbitMQ – single node for dev
 rabbitmq:
-  replicas: 1
-  storage:
-    size: "10Gi"
-    storageClassName: "standard"
-
+  replicaCount: 1
+  auth:
+    username: "root"
+    password: "dev-password"
+    erlangCookie: "dev-cookie"
   resources:
     requests:
       cpu: "250m"
@@ -56,21 +63,7 @@ rabbitmq:
       cpu: "500m"
       memory: "1Gi"
 
-# Elasticsearch Development
-elasticsearch:
-  storage:
-    size: "20Gi"
-    storageClassName: "standard"
-
-  resources:
-    requests:
-      cpu: "250m"
-      memory: "512Mi"
-    limits:
-      cpu: "500m"
-      memory: "1Gi"
-
-# Service Replicas - Development
+# One replica per microservice
 serviceReplicas: 1
 
 services:
@@ -84,6 +77,8 @@ services:
     replicas: 1
   io:
     replicas: 1
+  hk:
+    replicas: 1
   users:
     replicas: 1
   streams:
@@ -96,13 +91,9 @@ services:
     replicas: 1
   amqp:
     replicas: 1
-  language:
-    replicas: 1
   license:
+    replicas: 1
+  language:
     replicas: 1
   cronjob:
     replicas: 1
-
-# Backup deaktiviert in Development
-mongobackup:
-  enabled: false

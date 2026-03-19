@@ -1,7 +1,30 @@
-# Beispiel: AWS EBS CSI Driver Konfiguration
+# Example: AWS EBS CSI Driver
+# Use for deployments on AWS EKS
 
 global:
   storage:
     csiDriver: "ebs.csi.aws.com"
-    volumePath: "/mnt/helmut"
-    volumeSize: "100Gi"
+    storageClassName: "helmut4-csi-storage"
+    mountPath: "/Volumes/Helmut"
+    volume:
+      size: "100Gi"
+      source: "" # Not used with EBS – dynamic provisioning
+
+# MongoDB on a dedicated block-storage class (EBS gp3 recommended)
+mongodb:
+  persistence:
+    storageClass: "ebs-sc" # adjust to your EBS StorageClass
+    size: "50Gi"
+  auth:
+    rootUsername: "root"
+    rootPassword: "CHANGE_ME"
+  replicaSet:
+    enabled: true
+    name: "rs0"
+    key: "CHANGE_ME_BASE64_6_TO_1024_CHARS"
+
+rabbitmq:
+  auth:
+    username: "root"
+    password: "CHANGE_ME"
+    erlangCookie: "CHANGE_ME"
