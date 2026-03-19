@@ -1,0 +1,181 @@
+---
+# GitLab CI/CD pipeline for the Helmut4 Helm chart
+#
+# Stages:
+#   lint     – YAML syntax + Helm lint
+#   validate – Render templates and validate against Kubernetes schemas
+#   security – Security and best-practice checks
+#   package  – Package the chart and push to registry (on tags)
+
+stages:
+  - lint
+  - validate
+  - security
+  - package
+
+variables:
+  HELM_VERSION: "3.14.0"
+  CHART_DIR: "./helmut4"
+  KUBECONFORM_VERSION: "0.6.4"
+  KUBE_SCORE_VERSION: "1.19.0"
+  # Set in GitLab CI/CD variables (Settings → CI/CD → Variables):
+  #   HELM_REGISTRY_URL    – OCI registry URL, e.g. registry.gitlab.com/yourgroup
+  #   HELM_REGISTRY_USER   – registry username
+  #   HELM_REGISTRY_PASS   – registry password / CI token
+
+# ─── Shared setup ─────────────────────────────────────────────────────────────
+.helm-base:
+  image: alpine/helm:${HELM_VERSION}
+  before_script:
+    - helm dependency build ${CHART_DIR}
+
+# ─── Stage: lint ──────────────────────────────────────────────────────────────
+
+yaml-lint:
+  stage: lint
+  image: cytopia/yamllint:latest
+  script:
+    - |
+      yamllint -d '{
+        extends: default,
+        rules: {
+          line-length: {max: 160},
+          truthy: {allowed-values: ["true", "false", "yes", "no"]},
+          comments: {min-spaces-from-content: 1}
+        }
+      }' \
+        helmut4/values.yaml \
+        helmut4/Chart.yaml \
+        examples/ \
+        install-values.yaml
+  allow_failure: false
+
+helm-lint:
+  stage: lint
+  extends: .helm-base
+  script:
+    - helm lint ${CHART_DIR} --strict
+    - helm lint ${CHART_DIR} -f examples/values-production.yaml --strict
+    - helm lint ${CHART_DIR} -f examples/values-development.yaml --strict
+    - helm lint ${CHART_DIR} -f examples/values-aws-csi.yaml --strict
+    - helm lint ${CHART_DIR} -f examples/values-azure-csi.yaml --strict
+  allow_failure: false
+
+# ─── Stage: validate ──────────────────────────────────────────────────────────
+
+helm-template:
+  stage: validate
+  extends: .helm-base
+  script:
+    # Render templates with default values
+    - helm template helmut4 ${CHART_DIR} > /tmp/rendered-default.yaml
+    # Render templates with production values
+    - helm template helmut4 ${CHART_DIR} -f examples/values-production.yaml > /tmp/rendered-production.yaml
+    # Render templates with development values
+    - helm template helmut4 ${CHART_DIR} -f examples/values-development.yaml > /tmp/rendered-development.yaml
+    - echo "Template rendering successful"
+  artifacts:
+    paths:
+      - /tmp/rendered-*.yaml
+    expire_in: 1 hour
+  allow_failure: false
+
+kubeconform:
+  stage: validate
+  extends: .helm-base
+  image: alpine/helm:${HELM_VERSION}
+  before_script:
+    - helm dependency build ${CHART_DIR}
+    - apk add --no-cache curl
+    - |
+      curl -sSL \
+        https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz \
+        | tar xz -C /usr/local/bin
+  script:
+    - |
+      helm template helmut4 ${CHART_DIR} \
+        -f examples/values-production.yaml \
+        | kubeconform \
+            -strict \
+            -ignore-missing-schemas \
+            -kubernetes-version 1.28.0 \
+            -summary
+    - |
+      helm template helmut4 ${CHART_DIR} \
+        -f examples/values-development.yaml \
+        | kubeconform \
+            -strict \
+            -ignore-missing-schemas \
+            -kubernetes-version 1.28.0 \
+            -summary
+  allow_failure: false
+
+# ─── Stage: security ──────────────────────────────────────────────────────────
+
+kube-score:
+  stage: security
+  extends: .helm-base
+  image: alpine/helm:${HELM_VERSION}
+  before_script:
+    - helm dependency build ${CHART_DIR}
+    - apk add --no-cache curl
+    - |
+      curl -sSL \
+        https://github.com/zegl/kube-score/releases/download/v${KUBE_SCORE_VERSION}/kube-score_${KUBE_SCORE_VERSION}_linux_amd64.tar.gz \
+        | tar xz -C /usr/local/bin
+  script:
+    - |
+      helm template helmut4 ${CHART_DIR} \
+        -f examples/values-production.yaml \
+        | kube-score score \
+            --ignore-test pod-probes \
+            --ignore-test container-image-tag \
+            -
+  allow_failure: true # informational — does not block the pipeline
+
+checkov:
+  stage: security
+  image: bridgecrew/checkov:latest
+  script:
+    - |
+      checkov \
+        --directory ${CHART_DIR}/templates \
+        --framework helm \
+        --quiet \
+        --compact \
+        --skip-check CKV_K8S_8,CKV_K8S_9   # readiness/liveness – managed per service
+  allow_failure: true # informational — does not block the pipeline
+
+# ─── Stage: package ───────────────────────────────────────────────────────────
+
+package-chart:
+  stage: package
+  extends: .helm-base
+  script:
+    - helm package ${CHART_DIR} --destination ./dist
+    - ls -la ./dist/
+  artifacts:
+    paths:
+      - dist/*.tgz
+    expire_in: 7 days
+  rules:
+    - if: "$CI_COMMIT_TAG" # only on version tags, e.g. v1.2.3
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual # allow manual packaging from main
+
+push-to-registry:
+  stage: package
+  extends: .helm-base
+  script:
+    - helm package ${CHART_DIR} --destination ./dist
+    - helm registry login ${HELM_REGISTRY_URL} -u ${HELM_REGISTRY_USER} -p ${HELM_REGISTRY_PASS}
+    - |
+      for chart in dist/*.tgz; do
+        helm push "${chart}" oci://${HELM_REGISTRY_URL}
+      done
+  rules:
+    - if: "$CI_COMMIT_TAG" # only on version tags
+  environment:
+    name: helm-registry
+  needs:
+    - package-chart
