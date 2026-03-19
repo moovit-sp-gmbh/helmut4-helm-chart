@@ -48,7 +48,7 @@ yaml-lint:
   stage: lint
   script:
     # .yamllint.yml in the repo root is auto-discovered — no inline -d config needed
-    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$YAMLLINT_IMAGE" yamllint helmut4/values.yaml helmut4/Chart.yaml examples/
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$YAMLLINT_IMAGE" helmut4/values.yaml helmut4/Chart.yaml examples/
 
 helm-lint:
   stage: lint
