@@ -17,7 +17,7 @@ maintainers:
     email: your.email@example.com
 dependencies:
   - name: mongodb
-    version: "0.6.6"
+    version: "0.10.3"
     repository: "oci://registry-1.docker.io/cloudpirates"
   - name: rabbitmq
     version: "0.7.10"
