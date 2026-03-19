@@ -2,79 +2,80 @@
 
 ## 1. Docker Registry Credentials
 
-### Sichere Verwaltung
+### Secure handling
 
-**NICHT empfohlen**: Credentials in `values.yaml` speichern
+**Not recommended**: Credentials in `values.yaml`
 ```yaml
-# ❌ Nicht in Versionskontrolle!
+# Never commit this to version control!
 docker:
   username: "myuser"
   password: "mypassword"
 ```
 
-**Empfohlen**: Via Secrets oder Umgebungsvariablen
+**Recommended**: All credentials in `install-values.yaml` (not in git):
+```yaml
+# install-values.yaml (add to .gitignore!)
+docker:
+  username: "myuser"
+  password: "mypassword"
+  email: "my@email.com"
+```
+
 ```bash
-# Option 1: Helm CLI
-helm install helmut4 ./helmut4 \
-  --set docker.username="myuser" \
-  --set docker.password="mypassword"
+# Install using the values file
+helm upgrade helmut4 --install -n helmut4 --create-namespace   -f install-values.yaml ./helmut4
 
-# Option 2: Separate Secret-Datei (nicht in git!)
-helm install helmut4 ./helmut4 \
-  -f docker-secrets.yaml
-
-# Option 3: Existierendes Secret verwenden
-kubectl create secret docker-registry my-creds \
-  --docker-server=repo.moovit24.de:443 \
-  --docker-username=myuser \
-  --docker-password=mypassword
+# Alternative: create an existing registry secret
+kubectl create secret docker-registry my-creds   --docker-server=repo.moovit24.de:443   --docker-username=myuser   --docker-password=mypassword
 ```
 
 ## 2. Database Credentials
 
-### MongoDB Passwort ändern
+### Set MongoDB password
 
-```bash
-# In values.yaml oder via helm set
-helm install helmut4 ./helmut4 \
-  --set mongodb.auth.rootPassword="super-secure-password"
-
-# Nach Installation ändern
-kubectl set env statefulset/mongodb \
-  -n helmut4 \
-  MONGO_INITDB_ROOT_PASSWORD="new-password"
+```yaml
+# In install-values.yaml
+mongodb:
+  auth:
+    rootUsername: "root"
+    rootPassword: "super-secure-password"
 ```
 
-### RabbitMQ Passwort ändern
-
 ```bash
-# In values.yaml oder via helm set
-helm install helmut4 ./helmut4 \
-  --set rabbitmq.auth.password="super-secure-password"
+helm upgrade helmut4 --install -n helmut4 --create-namespace   -f install-values.yaml ./helmut4
+```
+
+### Set RabbitMQ password
+
+```yaml
+# In install-values.yaml
+rabbitmq:
+  auth:
+    username: "root"
+    password: "super-secure-password"
+    erlangCookie: "your-erlang-cookie"
 ```
 
 ## 3. RBAC (Role-Based Access Control)
 
-Das Chart erstellt automatisch RBAC-Ressourcen:
+The chart creates namespace-scoped RBAC resources by default:
 
 ```yaml
 rbac:
   create: true
 ```
 
-### Eingeschränkte RBAC
-Falls Sie mehr Kontrolle brauchen:
+This creates a `Role` and `RoleBinding` — no `ClusterRole` is used.
+
+### Custom role binding
 
 ```bash
-kubectl create rolebinding helmut4-admin \
-  --clusterrole=edit \
-  --serviceaccount=helmut4:helmut4-sa \
-  -n helmut4
+kubectl create rolebinding helmut4-admin   --clusterrole=edit   --serviceaccount=helmut4:helmut4-sa   -n helmut4
 ```
 
 ## 4. Network Policies
 
-### Traffic beschränken
+### Restrict traffic
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -93,20 +94,20 @@ spec:
           name: helmut4
 ```
 
-Anwenden:
+Apply:
 ```bash
 kubectl apply -f network-policy.yaml
 ```
 
-## 5. TLS/SSL Konfiguration
+## 5. TLS/SSL Configuration
 
-### Mit cert-manager
+### With cert-manager
 
 ```bash
-# 1. cert-manager installieren
+# 1. Install cert-manager
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
 
-# 2. ClusterIssuer erstellen
+# 2. Create ClusterIssuer
 cat > letsencrypt-issuer.yaml <<EOF
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -125,66 +126,67 @@ spec:
 EOF
 
 kubectl apply -f letsencrypt-issuer.yaml
-
-# 3. Chart mit TLS installieren
-helm install helmut4 ./helmut4 \
-  --set ingress.annotations."cert-manager\.io/cluster-issuer"=letsencrypt-prod \
-  --set ingress.tls[0].secretName=helmut4-tls \
-  --set ingress.tls[0].hosts[0]=api.your-domain.com
 ```
 
-## 6. Pod Security Policies
+```yaml
+# In install-values.yaml
+ingress:
+  tls:
+    enabled: true
+    provider: "letsencrypt"
+    certIssuer: "letsencrypt-prod"
+    secretName: "helmut4-tls"
+```
 
-### Restricted PSP
+```bash
+helm upgrade helmut4 --install -n helmut4 --create-namespace   -f install-values.yaml ./helmut4
+```
+
+## 6. Resource Limits and Quotas
+
+### Namespace quota
 
 ```yaml
-apiVersion: policy/v1beta1
-kind: PodSecurityPolicy
+apiVersion: v1
+kind: ResourceQuota
 metadata:
-  name: helmut4-restricted
+  name: helmut4-quota
+  namespace: helmut4
 spec:
-  privileged: false
-  allowPrivilegeEscalation: false
-  requiredDropCapabilities:
-  - ALL
-  volumes:
-  - 'configMap'
-  - 'emptyDir'
-  - 'projected'
-  - 'secret'
-  - 'downwardAPI'
-  - 'persistentVolumeClaim'
-  hostNetwork: false
-  hostIPC: false
-  hostPID: false
-  runAsUser:
-    rule: 'MustRunAsNonRoot'
-  seLinux:
-    rule: 'MustRunAs'
-    seLinuxOptions:
-      level: "s0:c123,c456"
-  supplementalGroups:
-    rule: 'MustRunAs'
-    ranges:
-    - min: 1
-      max: 65535
-  fsGroup:
-    rule: 'MustRunAs'
-    ranges:
-    - min: 1
-      max: 65535
+  hard:
+    requests.cpu: "10"
+    requests.memory: "20Gi"
+    limits.cpu: "20"
+    limits.memory: "40Gi"
+    pods: "100"
+    persistentvolumeclaims: "10"
+```
+
+### Pod limits
+
+```yaml
+# In install-values.yaml
+services:
+  fx:
+    resources:
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
 ```
 
 ## 7. Secrets Management
 
-### Using External Secrets (ESO)
+### Using External Secrets Operator (ESO)
 
 ```bash
-# 1. External Secrets Operator installieren
+# 1. Install External Secrets Operator
 helm repo add external-secrets https://charts.external-secrets.io
 helm install external-secrets external-secrets/external-secrets -n external-secrets-system
 
-# 2. SecretStore erstellen
+# 2. Create SecretStore
 cat > secretstore.yaml <<EOF
 apiVersion: external-secrets.io/v1beta1
 kind: SecretStore
@@ -202,7 +204,7 @@ spec:
           role: "helmut4"
 EOF
 
-# 3. ExternalSecret erstellen
+# 3. Create ExternalSecret
 cat > external-secret.yaml <<EOF
 apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret
@@ -227,43 +229,9 @@ spec:
 EOF
 ```
 
-## 8. Resource Limits und Quotas
+## 8. Audit Logging
 
-### Namespace Quota
-
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: helmut4
----
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: helmut4-quota
-  namespace: helmut4
-spec:
-  hard:
-    requests.cpu: "10"
-    requests.memory: "20Gi"
-    limits.cpu: "20"
-    limits.memory: "40Gi"
-    pods: "100"
-    persistentvolumeclaims: "10"
-```
-
-### Pod Limits
-
-```bash
-kubectl set resources deployment fx \
-  --limits=cpu=2,memory=2Gi \
-  --requests=cpu=500m,memory=1Gi \
-  -n helmut4
-```
-
-## 9. Audit Logging
-
-### Enable API Audit
+### Enable API audit
 
 ```yaml
 # /etc/kubernetes/audit-policy.yaml
@@ -276,23 +244,22 @@ rules:
   namespaces: ["helmut4"]
 ```
 
-## 10. Compliance Checkliste
+## 9. Compliance Checklist
 
-- [ ] Docker Credentials nicht in git
-- [ ] Database Passwörter geändert von Default
-- [ ] RBAC aktiviert
-- [ ] Network Policies definiert
-- [ ] TLS/SSL konfiguriert
-- [ ] Resource Limits gesetzt
-- [ ] Audit Logging aktiviert
-- [ ] Pod Security Policies durchgesetzt
-- [ ] External Secrets für sensible Daten
-- [ ] Regelmäßige Backups getestet
+- [ ] Docker credentials not in git
+- [ ] Database passwords changed from defaults
+- [ ] RBAC enabled (namespace-scoped)
+- [ ] Network policies defined
+- [ ] TLS/SSL configured
+- [ ] Resource limits set
+- [ ] Audit logging enabled
+- [ ] External secrets for sensitive data
+- [ ] Regular backups tested
+- [ ] `install-values.yaml` added to `.gitignore`
 
-## Weitere Ressourcen
+## Further Resources
 
 - [Kubernetes Security Best Practices](https://kubernetes.io/docs/concepts/security/pod-security-standards/)
-- [NIST Kubernetes Security](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-190.pdf)
 - [CIS Kubernetes Benchmark](https://www.cisecurity.org/benchmark/kubernetes)
 - [cert-manager Documentation](https://cert-manager.io/)
 - [External Secrets Operator](https://external-secrets.io/)

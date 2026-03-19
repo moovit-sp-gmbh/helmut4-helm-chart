@@ -1,414 +1,292 @@
 # Troubleshooting Guide
 
-## 1. Pod-Probleme
+## 1. Pods not starting
 
-### Pod startet nicht oder bleibt Pending
+### Check pod status
 
 ```bash
-# Status prüfen
 kubectl get pods -n helmut4
 kubectl describe pod -n helmut4 <pod-name>
-
-# Mögliche Ursachen:
-# - Insufficient resources (CPU, Memory)
-# - PersistentVolumeClaim pending
-# - Image Pull Fehler
+kubectl logs -n helmut4 <pod-name>
 ```
 
-**Lösung:**
+### Common states
+
+| State | Cause | Solution |
+|-------|-------|----------|
+| `Pending` | No resources / PVC not bound | Check nodes, PVCs |
+| `CrashLoopBackOff` | App error / DB not ready | Check logs |
+| `ImagePullBackOff` | Wrong credentials / image not found | Check docker secret |
+| `Init:Error` | Init container failed | Check init container logs |
+
+### Init container logs
+
 ```bash
-# 1. Resources prüfen
-kubectl describe node | grep -A 5 "Allocated resources"
-
-# 2. PVC Status prüfen
-kubectl get pvc -n helmut4
-
-# 3. Image verfügbar?
-kubectl describe pod -n helmut4 <pod-name> | grep -A 5 "Events:"
+kubectl logs -n helmut4 <pod-name> -c <init-container-name>
 ```
 
-### CrashLoopBackOff
+## 2. MongoDB issues
 
-Pod startet und crasht sofort wieder.
-
-```bash
-# Logs anschauen
-kubectl logs -n helmut4 <pod-name> --tail=50
-
-# Mit Previous Log (letzter Crash)
-kubectl logs -n helmut4 <pod-name> --previous
-```
-
-**Häufige Ursachen:**
-- Abhängigkeit nicht erreichbar (MongoDB, RabbitMQ)
-- Falsche Konfiguration
-- Falsche Credentials
-
-### ImagePullBackOff
-
-Image kann nicht gepullt werden.
+### Replica set not forming
 
 ```bash
-# Pull Secrets prüfen
-kubectl get secret -n helmut4 docker-registry-secret -o yaml
+# Check RS status
+kubectl exec -n helmut4 -it mongodb-0 -- mongosh   -u root -p <password> --eval "rs.status()"
 
-# Pod Events prüfen
-kubectl describe pod -n helmut4 <pod-name> | grep "Pull"
-```
+# Check MongoDB pods
+kubectl get pods -n helmut4 -l app.kubernetes.io/name=mongodb
 
-**Lösung:**
-```bash
-# Credentials überprüfen
-echo "Username: $DOCKER_USER"
-echo "Password: $DOCKER_PASS"
-
-# Manuell testen
-docker login repo.moovit24.de:443
-docker pull repo.moovit24.de:443/mcp_fx:4.9.1.1
-```
-
-## 2. Database-Probleme
-
-### MongoDB Pods nicht ready
-
-```bash
-# MongoDB Status
-kubectl get statefulset mongodb -n helmut4
-kubectl get pods -n helmut4 -l app=mongodb
-
-# Logs prüfen
+# Check logs
 kubectl logs -n helmut4 mongodb-0
-
-# Replica-Set Status
-kubectl exec -n helmut4 -it mongodb-0 -- mongo -u root -p ***REMOVED*** --eval "rs.status()"
 ```
 
-**Typische Fehler:**
-```
-error: connect ECONNREFUSED 127.0.0.1:27017
-# → MongoDB läuft noch nicht, warten
-
-error: auth failed
-# → Credentials falsch
-```
-
-**Lösung:**
-```bash
-# 1. Sicherstellen, dass alle Pods laufen
-kubectl wait --for=condition=ready pod -l app=mongodb -n helmut4 --timeout=300s
-
-# 2. Replica-Set manuell initialisieren
-kubectl exec -n helmut4 -it mongodb-0 -- mongo -u root -p ***REMOVED*** --eval \
-  "rs.initiate({_id:'rs0',members:[{_id:0,host:'mongodb-0.mongodb-headless'}]})"
-
-# 3. Weitere Nodes hinzufügen
-kubectl exec -n helmut4 -it mongodb-0 -- mongo -u root -p ***REMOVED*** --eval \
-  "rs.add('mongodb-1.mongodb-headless'); rs.add('mongodb-2.mongodb-headless')"
-```
-
-### RabbitMQ Pods nicht ready
+### Manual RS initialization
 
 ```bash
-# RabbitMQ Status
-kubectl get statefulset rabbitmq -n helmut4
-kubectl get pods -n helmut4 -l app=rabbitmq
-
-# Logs prüfen
-kubectl logs -n helmut4 rabbitmq-0
-
-# Health Check
-kubectl exec -n helmut4 -it rabbitmq-0 -- rabbitmq-diagnostics ping
+kubectl exec -n helmut4 -it mongodb-0 -- mongosh -u root -p <password> --eval   "rs.initiate({
+    _id: 'rs0',
+    members: [
+      {_id: 0, host: 'mongodb-0.mongodb-headless:27017'},
+      {_id: 1, host: 'mongodb-1.mongodb-headless:27017'},
+      {_id: 2, host: 'mongodb-2.mongodb-headless:27017'}
+    ]
+  })"
 ```
 
-**Lösung:**
-```bash
-# 1. Warten bis alle Pods starten
-kubectl wait --for=condition=ready pod -l app=rabbitmq -n helmut4 --timeout=300s
+### Authentication failing
 
-# 2. Cluster Status prüfen
+```bash
+# Verify secret
+kubectl get secret mongodb -n helmut4 -o yaml
+
+# Test connection
+kubectl exec -n helmut4 -it mongodb-0 -- mongosh   -u root -p <password> --authenticationDatabase admin --eval "db.adminCommand('ping')"
+```
+
+## 3. RabbitMQ issues
+
+### Cluster not forming
+
+```bash
+# Check cluster status
 kubectl exec -n helmut4 -it rabbitmq-0 -- rabbitmqctl cluster_status
+
+# Check connectivity
+kubectl exec -n helmut4 -it rabbitmq-0 -- rabbitmq-diagnostics ping
+
+# Check logs
+kubectl logs -n helmut4 rabbitmq-0
 ```
 
-### Services können nicht auf Datenbanken zugreifen
+### Authentication failing
 
 ```bash
-# Service → Database Connectivity prüfen
-kubectl exec -n helmut4 -it fx-0 -- nc -zv mongodb-0.mongodb-headless 27017
+# Verify Erlang cookie
+kubectl get secret rabbitmq -n helmut4 -o yaml
 
-# DNS Auflösung testen
-kubectl exec -n helmut4 -it fx-0 -- nslookup mongodb.helmut4.svc.cluster.local
-
-# Logs des Services prüfen
-kubectl logs -n helmut4 deployment/fx --tail=100
+# Test RabbitMQ
+kubectl exec -n helmut4 -it rabbitmq-0 -- rabbitmqctl list_users
 ```
 
-## 3. Ingress-Probleme
+## 4. Storage issues
 
-### Ingress wird nicht erstellt
-
-```bash
-# Ingress Status prüfen
-kubectl get ingress -n helmut4
-
-# Ingress Details
-kubectl describe ingress -n helmut4 helmut4-helmut4-ingress
-```
-
-**Lösungen:**
-```bash
-# 1. Nginx Ingress Controller installiert?
-kubectl get ingressclass
-kubectl get pods -n ingress-nginx
-
-# 2. Wenn nicht, installieren:
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm install nginx-ingress ingress-nginx/ingress-nginx -n ingress-nginx --create-namespace
-```
-
-### Domain nicht erreichbar
+### PVC stuck in Pending
 
 ```bash
-# Ingress IP/Hostname prüfen
-kubectl get ingress -n helmut4 helmut4-helmut4-ingress -o wide
-
-# DNS prüfen
-nslookup api.your-domain.com
-
-# Ingress testen
-curl -k https://api.your-domain.com/health
-```
-
-**Typische Fehler:**
-
-1. **503 Service Unavailable**
-   - Backend Service nicht erreichbar
-   - Pods sind nicht ready
-
-2. **502 Bad Gateway**
-   - Backend Service Fehler
-   - Falsche Port-Konfiguration
-
-3. **404 Not Found**
-   - Path nicht im Ingress definiert
-   - Falsche Route
-
-**Debugging:**
-```bash
-# Ingress Controller Logs
-kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx -f
-
-# Service Endpoints prüfen
-kubectl get endpoints -n helmut4
-
-# Port-Forward testen
-kubectl port-forward -n helmut4 svc/fx 8100:8100
-curl http://localhost:8100/health
-```
-
-## 4. Storage-Probleme
-
-### PVC bleibt Pending
-
-```bash
-# PVC Status
-kubectl get pvc -n helmut4
 kubectl describe pvc helmut-storage-pvc -n helmut4
 
-# StorageClass prüfen
+# Check StorageClass
 kubectl get storageclass
+
+# Check CSI driver
+kubectl get csinode
 ```
 
-**Lösungen:**
-```bash
-# 1. CSI Driver installiert?
-kubectl get pods -n kube-system | grep csi
-
-# 2. Available PersistentVolumes?
-kubectl get pv
-
-# 3. Fallback auf Minikube/Local Storage
-kubectl create storageclass local-storage \
-  --provisioner kubernetes.io/no-provisioner \
-  --reclaim-policy Delete
-```
-
-### Pod kann nicht an PVC binden
+### SMB volume not mounting
 
 ```bash
-# Pod Events prüfen
-kubectl describe pod -n helmut4 <pod-name> | grep -A 10 "Events:"
+# Check credentials secret
+kubectl get secret smb-credentials -n helmut4 -o yaml
 
-# Volume Status prüfen
+# Check CSI driver logs
+kubectl logs -n kube-system -l app=csi-driver-smb
+
+# Check volume attachments
 kubectl get volumeattachments
-
-# CSI Driver Logs
-kubectl logs -n kube-system -l app=csi-driver -f
 ```
 
-## 5. Performance-Probleme
-
-### Pods sind langsam
+### Longhorn PVC issues
 
 ```bash
-# Resource Usage prüfen
+# Check Longhorn volumes
+kubectl get volumes.longhorn.io -n longhorn-system
+
+# Check Longhorn manager
+kubectl logs -n longhorn-system -l app=longhorn-manager --tail=50
+```
+
+## 5. Performance issues
+
+### Pods are slow
+
+```bash
+# Check resource usage
 kubectl top nodes
 kubectl top pods -n helmut4
 
-# Wenn nicht verfügbar: Metrics Server installieren
+# Install Metrics Server if not available
 kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 ```
 
-**Optimierungen:**
+**Optimizations:**
 ```bash
-# 1. Limits prüfen
+# Check limits
 kubectl describe pod -n helmut4 <pod-name> | grep -A 5 "Limits\|Requests"
 
-# 2. Zu niedrig? Erhöhen
-kubectl set resources deployment fx -n helmut4 \
-  --requests=cpu=1,memory=2Gi \
-  --limits=cpu=2,memory=4Gi
-
-# 3. Nodes prüfen
-kubectl describe nodes | grep -A 5 "Allocated resources"
+# Increase resources via install-values.yaml
+# services:
+#   fx:
+#     resources:
+#       requests: {cpu: "1", memory: "2Gi"}
+#       limits:   {cpu: "2", memory: "4Gi"}
+helm upgrade helmut4 ./helmut4 -n helmut4 -f install-values.yaml
 ```
 
-### High CPU/Memory Usage
+### High CPU/Memory usage
 
 ```bash
-# Top Pods anschauen
 kubectl top pods -n helmut4 --sort-by=cpu
 kubectl top pods -n helmut4 --sort-by=memory
-
-# Service-spezifische Logs
 kubectl logs -n helmut4 <high-usage-pod> --tail=200
 ```
 
-## 6. Network-Probleme
+## 6. Network issues
 
-### Pods können sich nicht untereinander erreichen
+### Pods cannot reach each other
 
 ```bash
-# Connectivity testen
+# Test connectivity
 kubectl run -it --image=busybox --restart=Never test-pod -- sh
 
-# Im Pod:
-wget http://fx:8100/health  # Sollte funktionieren
-nc -zv mongodb 27017        # Sollte offen sein
+# Inside the pod:
+wget http://fx:8100/health
+nc -zv mongodb-headless 27017  # Headless service (RS mode)
+nc -zv rabbitmq 5672
 ```
 
-### DNS Resolution Fehler
+### DNS resolution errors
 
 ```bash
-# DNS Service prüfen
+# Check CoreDNS
 kubectl get pods -n kube-system | grep coredns
 
-# DNS testen
-kubectl exec -it <pod> -- nslookup kubernetes.default
-kubectl exec -it <pod> -- nslookup fx.helmut4.svc.cluster.local
+# Test DNS
+kubectl exec -it <pod> -n helmut4 -- nslookup kubernetes.default
+kubectl exec -it <pod> -n helmut4 -- nslookup mongodb-headless.helmut4.svc.cluster.local
 ```
 
-## 7. Logging und Monitoring
+## 7. Logging and Monitoring
 
-### Alle Logs einer Komponente
+### All logs for a component
 
 ```bash
-# MongoDB Logs
-kubectl logs -n helmut4 -l app=mongodb --all-containers=true --tail=100
+# MongoDB logs
+kubectl logs -n helmut4 -l app.kubernetes.io/name=mongodb --all-containers=true --tail=100
 
-# RabbitMQ Logs
-kubectl logs -n helmut4 -l app=rabbitmq --all-containers=true --tail=100
+# RabbitMQ logs
+kubectl logs -n helmut4 -l app.kubernetes.io/name=rabbitmq --all-containers=true --tail=100
 
-# Alle Service Logs
+# All service logs
 kubectl logs -n helmut4 --all-containers=true -f
 ```
 
-### Events monitoren
+### Monitor events
 
 ```bash
-# Neueste Events
+# Latest events
 kubectl get events -n helmut4 --sort-by='.lastTimestamp'
 
-# Kontinuierlich
+# Continuous watch
 kubectl get events -n helmut4 -w
 ```
 
 ## 8. Debug Commands
 
-### Shell in Pod bekommen
+### Get a shell in a pod
 
 ```bash
-# Interaktive Shell
+# Interactive shell
 kubectl exec -it -n helmut4 <pod-name> -- /bin/bash
 
-# Oder sh für Alpine
+# Or sh for Alpine
 kubectl exec -it -n helmut4 <pod-name> -- /bin/sh
 ```
 
-### Port-Forwarding
+### Port-forwarding
 
 ```bash
-# Service direkt zugreifen
+# Access MongoDB directly
 kubectl port-forward -n helmut4 svc/mongodb 27017:27017
 
-# Im anderen Terminal
-mongo -u root -p ***REMOVED*** localhost:27017
+# In another terminal
+mongosh -u root -p <password> localhost:27017
 ```
 
-### Copy Dateien
+### Copy files
 
 ```bash
-# Aus Pod kopieren
+# Copy from pod
 kubectl cp helmut4/<pod>:/path/to/file ./local-file
 
-# In Pod kopieren
+# Copy to pod
 kubectl cp ./local-file helmut4/<pod>:/path/to/file
 ```
 
-## 9. Checkliste für neuen Deployment
+## 9. New Deployment Checklist
 
-- [ ] Alle Pods sind in Ready state
-- [ ] Keine CrashLoopBackOff oder Pending Pods
-- [ ] MongoDB Replica-Set funktioniert
-- [ ] RabbitMQ Cluster funktioniert
-- [ ] Ingress ist erstellt
-- [ ] Domain ist erreichbar
-- [ ] Logs sind sauber (kein Errors)
-- [ ] PVCs sind Bound
-- [ ] Alle Services sind verfügbar
-- [ ] Credentials sind korrekt
+- [ ] All pods are in Ready state
+- [ ] No CrashLoopBackOff or Pending pods
+- [ ] MongoDB replica set is healthy
+- [ ] RabbitMQ cluster is healthy
+- [ ] Ingress is created
+- [ ] Domain is reachable
+- [ ] Logs are clean (no errors)
+- [ ] PVCs are Bound
+- [ ] All services are available
+- [ ] Credentials are correct
 
 ## 10. Emergency Procedures
 
-### Kompletter Reset
+### Full reset
 
 ```bash
-# WARNUNG: LÖSCHT ALLE DATEN!
+# WARNING: ALL DATA WILL BE LOST!
 helm uninstall helmut4 -n helmut4
 kubectl delete pvc --all -n helmut4
 kubectl delete namespace helmut4
 
-# Neu deployen
-helm install helmut4 ./helmut4 -n helmut4 --create-namespace
+# Redeploy
+helm upgrade helmut4 --install -n helmut4 --create-namespace -f install-values.yaml ./helmut4
 ```
 
-### Schneller Restart
+### Quick restart
 
 ```bash
-# Alle Pods neustarten
+# Restart all pods
 kubectl rollout restart deployment -n helmut4
 kubectl rollout restart statefulset -n helmut4
 ```
 
-### Dry-Run für Debugging
+### Dry-run for debugging
 
 ```bash
-helm install helmut4 ./helmut4 -n helmut4 --dry-run --debug > output.yaml
+helm upgrade helmut4 ./helmut4 -n helmut4 -f install-values.yaml --dry-run --debug > output.yaml
 ```
 
-## Kontakt und Support
+## Contact and Support
 
-Für weitere Hilfe:
-1. Prüfen Sie die Logs: `kubectl logs`
-2. Beschreiben Sie die Ressourcen: `kubectl describe`
-3. Prüfen Sie Events: `kubectl get events`
-4. Kontaktieren Sie das Team mit den Logs
+For further help:
+1. Check the logs: `kubectl logs`
+2. Describe resources: `kubectl describe`
+3. Check events: `kubectl get events`
+4. Run health check: `./scripts/health-check.sh helmut4`

@@ -98,7 +98,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce             # Nur ein Pod
-  storageClassName: fast-ssd
+  storageClassName: longhorn  # or any block-storage class (managed-premium, gp3, etc.)
   resources:
     requests:
       storage: 50Gi
