@@ -1,0 +1,219 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://moovit24.de/helmut4/values.schema.json",
+  "title": "Helmut4 chart values",
+  "description": "Validation schema for the Helmut4 Helm chart. Parent-chart values are strictly typed; subchart blocks (mongodb, rabbitmq) are intentionally permissive because their subcharts ship their own schemas.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "namespace",
+    "global",
+    "appIngress",
+    "docker",
+    "services"
+  ],
+  "definitions": {
+    "imagePullPolicy": {
+      "type": "string",
+      "enum": ["Always", "IfNotPresent", "Never"]
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "resourceQuantity": {
+      "type": ["string", "integer", "number"]
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/resourceQuantity" }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/resourceQuantity" }
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "image", "tag", "port"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "image": { "type": "string", "minLength": 1 },
+        "tag": { "type": ["string", "number"], "minLength": 1 },
+        "port": { "$ref": "#/definitions/port" },
+        "replicas": { "type": "integer", "minimum": 0 },
+        "resources": { "$ref": "#/definitions/resources" },
+        "volumeMounts": { "type": "boolean" }
+      }
+    }
+  },
+  "properties": {
+    "versions": {
+      "type": "object",
+      "description": "Centralised image tags. Anchored from the rest of the file.",
+      "additionalProperties": { "type": ["string", "number"] }
+    },
+    "credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "smb": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "username": { "type": "string" },
+                "password": { "type": "string" },
+                "domain": { "type": "string" }
+              }
+            },
+            "nfs": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "username": { "type": "string" },
+                "password": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "global": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["registry", "imagePullPolicy"],
+      "properties": {
+        "environment": { "type": "string", "minLength": 1 },
+        "registry": { "type": "string", "minLength": 1 },
+        "imagePullPolicy": { "$ref": "#/definitions/imagePullPolicy" },
+        "imagePullSecrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": { "name": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "description": "Cluster-wide CSI/StorageClass settings plus an open-ended map of shares. Each share follows the `{size, source}` shape; `volume` is the canonical one consumed by the chart, additional keys (e.g. `mongobackup`) can be defined for ancillary mounts.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "size": { "type": "string" },
+              "source": { "type": "string" }
+            }
+          },
+          "properties": {
+            "csiDriver": { "type": "string" },
+            "storageClassName": { "type": "string" },
+            "mountPath": { "type": "string" },
+            "volume": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "size": { "type": "string" },
+                "source": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "namespace": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+      "description": "Kubernetes namespace name (DNS-1123 label)."
+    },
+    "rbac": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "create": { "type": "boolean" },
+        "createNamespace": { "type": "boolean" }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "create": { "type": "boolean" },
+        "name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "appIngress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "domain"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "className": { "type": "string", "minLength": 1 },
+        "domain": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?)*$"
+        },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "provider"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "secretName": { "type": "string", "minLength": 1 },
+            "certIssuer": { "type": "string" },
+            "provider": { "type": "string", "enum": ["letsencrypt", "custom"] },
+            "certFile": { "type": "string" },
+            "keyFile": { "type": "string" }
+          }
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "number", "boolean"] }
+        }
+      }
+    },
+    "docker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry", "username", "password"],
+      "properties": {
+        "registry": { "type": "string", "minLength": 1 },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "email": { "type": "string" }
+      }
+    },
+    "mongodb": {
+      "type": "object",
+      "description": "Forwarded to the cloudpirates/mongodb subchart; that subchart ships its own schema, so we only mark the block as an object here.",
+      "additionalProperties": true
+    },
+    "rabbitmq": {
+      "type": "object",
+      "description": "Forwarded to the cloudpirates/rabbitmq subchart; that subchart ships its own schema. The parent chart only adds `webstomp` (consumed by the application Ingress).",
+      "additionalProperties": true,
+      "properties": {
+        "webstomp": { "$ref": "#/definitions/port" }
+      }
+    },
+    "serviceReplicas": { "type": "integer", "minimum": 0 },
+    "services": {
+      "type": "object",
+      "description": "Per-microservice deployment settings. Every value follows the `service` shape.",
+      "additionalProperties": { "$ref": "#/definitions/service" }
+    }
+  }
+}
