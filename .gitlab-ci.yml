@@ -25,6 +25,7 @@ stages:
 variables:
   # Tool images - pin versions for reproducibility
   HELM_IMAGE: "alpine/helm:3.14.0"
+  HELM_DOCS_IMAGE: "jnorwood/helm-docs:v1.14.2"
   KUBECONFORM_IMAGE: "ghcr.io/yannh/kubeconform:v0.6.4-alpine"
   KUBE_SCORE_IMAGE: "zegl/kube-score:v1.19.0"
   CHECKOV_IMAGE: "bridgecrew/checkov:3"
@@ -49,6 +50,15 @@ yaml-lint:
   script:
     # .yamllint.yml in the repo root is auto-discovered — no inline -d config needed
     - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$YAMLLINT_IMAGE" helmut4/values.yaml helmut4/Chart.yaml examples/
+
+helm-docs:
+  stage: lint
+  # Re-render helmut4/README.md from values.yaml + Chart.yaml and fail if the
+  # committed file is out of date. Run `helm-docs --chart-search-root helmut4`
+  # locally and commit the result to fix.
+  script:
+    - docker run --rm -v "$CI_PROJECT_DIR:/workspace" -w /workspace "$HELM_DOCS_IMAGE" --chart-search-root helmut4
+    - git diff --exit-code -- helmut4/README.md
 
 helm-lint:
   stage: lint

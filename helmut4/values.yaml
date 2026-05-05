@@ -1,164 +1,233 @@
-# Image Versions - Centralized for easy updates
+# -- Centralised image tags so the whole stack bumps together. Anchors below
+# are referenced from `mongodb.image.tag`, `rabbitmq.image.tag` and the
+# `services.<name>.tag` entries.
 versions:
+  # -- Tag for the bundled cloudpirates/mongodb image.
   mongodb: &mongodbVersion "4.12.0.0"
+  # -- Tag for the bundled cloudpirates/rabbitmq image.
   rabbitmq: &rabbitmqVersion "4.1.0.0"
 
   # Microservices
+  # -- Image tag for the `hp` (HelmutPanel) microservice.
   hp: &hpVersion "4.12.0.3"
+  # -- Image tag for the `hw` (HelmutWorker) microservice.
   hw: &hwVersion "4.12.0.3"
+  # -- Image tag for the `fx` microservice.
   fx: &fxVersion "4.12.0.2"
+  # -- Image tag for the `co` microservice.
   co: &coVersion "4.12.0.6"
+  # -- Image tag for the `io` microservice.
   io: &ioVersion "4.12.0.1"
+  # -- Image tag for the `hk` microservice.
   hk: &hkVersion "4.12.0.0"
+  # -- Image tag for the `users` microservice.
   users: &usersVersion "4.12.0.1"
+  # -- Image tag for the `streams` microservice.
   streams: &streamsVersion "4.12.0.5"
+  # -- Image tag for the `preferences` microservice.
   preferences: &preferencesVersion "4.12.0.0"
+  # -- Image tag for the `metadata` microservice.
   metadata: &metadataVersion "4.12.0.0"
+  # -- Image tag for the `logging` microservice.
   logging: &loggingVersion "4.12.0.0"
+  # -- Image tag for the `amqp` microservice.
   amqp: &amqpVersion "4.12.0.0"
+  # -- Image tag for the `license` microservice.
   license: &licenseVersion "4.12.0.3"
+  # -- Image tag for the `language` microservice.
   language: &languageVersion "4.12.0.0"
+  # -- Image tag for the `cronjob` microservice.
   cronjob: &cronjobVersion "4.12.0.0"
 
-# Storage Credentials - Centralized for easy management
-# Used by CSI drivers (SMB, NFS, etc.) to access external shares
+# -- Storage credentials forwarded to CSI drivers (SMB / NFS) that mount
+# external file shares into the Helmut4 pods. Empty values mean the chart
+# does not create the corresponding `Secret`.
 credentials:
   storage:
-    # SMB Share Credentials
     smb:
-      # Username for SMB authentication (e.g., domain\username or username)
+      # -- SMB user (e.g. `domain\\user` or plain `user`). Leave empty if SMB
+      # is not used.
       username: ""
-      # Password for SMB authentication
+      # -- SMB password. Leave empty if SMB is not used.
       password: ""
-      # Optional: SMB domain name
+      # -- Optional SMB domain.
       domain: ""
 
-    # NFS credentials (typically not needed for standard NFS, but some setups require it)
     nfs:
-      # Leave empty for anonymous NFS access
+      # -- NFS user. Most NFS setups are anonymous; leave empty unless your
+      # server requires authentication.
       username: ""
+      # -- NFS password. Most NFS setups are anonymous; leave empty unless
+      # your server requires authentication.
       password: ""
 
-# Global settings
+# -- Cluster-wide defaults shared by every microservice Deployment.
 global:
+  # -- Free-form environment tag exposed to the workloads. Common values are
+  # `production`, `staging`, `development`.
   environment: "production"
-  # Docker registry configuration
+  # -- Docker registry hostname (and optional port) prefixed to every image
+  # reference rendered from `services.<name>.image`.
   registry: "repo.moovit24.de:443"
+  # -- Pod-level image pull policy applied to every container the chart
+  # renders. One of `Always`, `IfNotPresent`, `Never`.
   imagePullPolicy: IfNotPresent
 
-  # Image pull secrets for private registry
+  # -- List of `imagePullSecrets` attached to every workload. The default
+  # entry refers to the Secret created from `docker.*` below.
   imagePullSecrets:
     - name: docker-registry-secret-json
 
-  # Storage configuration
   storage:
-    # CSI driver for mounting external storage (e.g., "smb.csi.k8s.io" for SMB, "nfs.csi.k8s.io" for NFS)
+    # -- CSI driver that backs the application file storage (e.g.
+    # `smb.csi.k8s.io`, `nfs.csi.k8s.io`). The chart only references the
+    # name; the driver itself must already be installed in the cluster.
     csiDriver: "csi-driver-name"
 
-    # Storage class configuration
+    # -- Name of the StorageClass the chart creates and consumes for the
+    # `/Volumes/Helmut` mount.
     storageClassName: "helmut4-csi-storage"
 
-    # Container mount point for Helmut storage
-    # This is where the storage will be mounted inside containers
+    # -- Path inside the containers where the shared storage is mounted.
     mountPath: "/Volumes/Helmut"
 
-    # Main /Volumes storage
     volume:
+      # -- Size requested for the main `/Volumes` PVC.
       size: "100Gi"
-      # For SMB shares: //server/share or \\server\share
-      # For NFS shares: server:/path
-      # Leave empty to use dynamic provisioning
+      # -- Backend share to mount. Use `//server/share` for SMB and
+      # `server:/path` for NFS. Leave empty to use dynamic provisioning.
       source: ""
 
-# Namespace
+# -- Kubernetes namespace that owns every resource this chart creates.
 namespace: helmut4
 
-# RBAC
 rbac:
+  # -- Render the RBAC `Role` / `RoleBinding` that the microservices need.
   create: true
-  createNamespace: true # Set to false if namespace already exists
+  # -- Also render a `Namespace` object. Set to `false` if the namespace
+  # already exists or is managed elsewhere.
+  createNamespace: true
 
-# Service Account
 serviceAccount:
+  # -- Render a dedicated ServiceAccount for the workloads.
   create: true
+  # -- Name of the ServiceAccount referenced from every Deployment.
   name: helmut4-sa
 
-# Main application ingress configuration
+# -- Public Ingress that fronts every Helmut4 microservice (one host, many
+# path prefixes). Disabling this requires routing the services through
+# another mechanism.
 appIngress:
+  # -- Render the application Ingress object.
   enabled: true
+  # -- IngressClass name. The chart is tested against `nginx`
+  # (kubernetes/ingress-nginx); other controllers may need different
+  # annotations.
   className: "nginx"
 
-  # Main ingress domain - all services route through this domain
+  # -- Public hostname terminated by the Ingress.
   domain: "helmut-k8s.moovit24.de"
 
-  # TLS configuration
   tls:
+    # -- Enable TLS termination on the Ingress.
     enabled: true
+    # -- Name of the Secret used by the TLS section of the Ingress. Created
+    # automatically when `tls.provider` is `letsencrypt`.
     secretName: "helmut4-tls"
 
-    # Two options for TLS certificates:
-    # 1. Using Let's Encrypt (automatic via cert-manager) - set certIssuer
-    # 2. Using your own certificate - set provider: "custom" and provide certFile/keyFile
-
-    # Option 1: Let's Encrypt configuration
-    # Set certIssuer to use cert-manager (e.g., "letsencrypt-prod", "letsencrypt-staging")
+    # -- cert-manager ClusterIssuer used when `tls.provider` is
+    # `letsencrypt` (typically `letsencrypt-prod` or `letsencrypt-staging`).
     certIssuer: "letsencrypt-prod"
 
-    # Option 2: Custom certificate configuration
-    provider: "letsencrypt" # Set to "custom" to use your own certificate
+    # -- TLS provider. `letsencrypt` makes cert-manager issue a certificate;
+    # `custom` reuses the cert/key paths configured below.
+    provider: "letsencrypt"
 
-    # For custom certificates, provide the paths to cert and key files
-    # These will be mounted from a Secret in the cluster
+    # -- Container path of the TLS certificate when `tls.provider` is
+    # `custom`. Mounted from a pre-existing Secret.
     certFile: "/etc/tls/certs/tls.crt"
+    # -- Container path of the TLS private key when `tls.provider` is
+    # `custom`. Mounted from a pre-existing Secret.
     keyFile: "/etc/tls/certs/tls.key"
 
+  # -- Annotations applied to the Ingress object. The defaults enable
+  # WebSocket support for STOMP-over-WS (RabbitMQ `/ws`) and the users
+  # service (`/v1/ws`); ingress-nginx already sets `Upgrade`/`Connection`
+  # natively, so only HTTP/1.1 and the long timeouts need to be forced
+  # explicitly.
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    # WebSocket support – required for RabbitMQ STOMP-over-WS (/ws) and users service (/v1/ws).
-    # ingress-nginx sets Upgrade/Connection headers natively via its $connection_upgrade map;
-    # only timeouts and HTTP/1.1 need to be forced explicitly here.
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
 
-# Docker Registry Credentials
+# -- Credentials for the private Docker registry that hosts the Helmut4
+# images. Rendered into a `kubernetes.io/dockerconfigjson` Secret named
+# `docker-registry-secret-json` and referenced via `global.imagePullSecrets`.
 docker:
+  # -- Registry hostname (and optional port) that the Secret is scoped to.
   registry: "repo.moovit24.de:443"
-  username: "moovit" # Standard username für public images
-  password: "public" # Standard password für public images
+  # -- Registry username. The default `moovit` works for the public images.
+  username: "moovit"
+  # -- Registry password. The default `public` works for the public images.
+  password: "public"
+  # -- Optional contact email written into the dockerconfigjson Secret.
   email: ""
 
-# MongoDB Configuration
+# -- Bundled cloudpirates/mongodb subchart. Only the keys the parent chart
+# overrides are listed below; everything not mentioned falls through to the
+# subchart's own defaults (see its README and `values.schema.json`).
 mongodb:
+  # -- Enable the bundled MongoDB subchart.
   enabled: true
+  # -- Override the rendered Service / StatefulSet name (kept short so the
+  # microservices can reach `mongodb:27017`).
   fullnameOverride: "mongodb"
+  # -- Database created at first start; the microservices connect to it by
+  # name.
   database: "helmut4"
 
   auth:
+    # -- MongoDB root username.
     rootUsername: "root"
+    # -- MongoDB root password. Replace before exposing the service.
     rootPassword: "***REMOVED***"
-    # When existingSecret is set, no mongodb-credentials Secret is created by this chart.
-    # The MongoDB sub-chart creates a Secret named after fullnameOverride (e.g. "mongodb")
-    # with key "mongodb-root-password". Set existingSecret to reuse it directly.
+    # -- Reuse an existing Secret instead of letting the chart create one.
+    # When set, no `mongodb-credentials` Secret is rendered – the subchart
+    # already creates a Secret named after `fullnameOverride` with key
+    # `mongodb-root-password`, which can be referenced here.
     existingSecret: ""
+    # -- Key inside `existingSecret` that holds the username. Empty means
+    # the subchart's default key.
     existingUsernameKey: ""
+    # -- Key inside `existingSecret` that holds the password.
     existingPasswordKey: "mongodb-root-password"
 
   replicaSet:
+    # -- Run MongoDB as a 3-node replica set. Disabling this falls back to
+    # standalone mode and breaks the microservices' default connection
+    # string.
     enabled: true
+    # -- Replica set name.
     name: "rs0"
+    # -- Replica set keyfile contents (base64). Replace before exposing.
     key: "***REMOVED***="
 
-  # Persistent storage for MongoDB data.
-  # Use a block-storage class (e.g. Longhorn) – NOT the SMB share.
-  # SMB is a file-share and causes problems with MongoDB (locking, stale data on
-  # reinstall because the share is not wiped when PVCs are deleted).
+  # -- Persistent storage for MongoDB data. Use a block-storage class (e.g.
+  # Longhorn) – NOT the SMB share. SMB is a file-share and causes problems
+  # with MongoDB (locking, stale data on reinstall because the share is not
+  # wiped when PVCs are deleted).
   persistence:
+    # -- Bind a PVC to each replica.
     enabled: true
+    # -- StorageClass that backs the PVCs. Block storage only.
     storageClass: "longhorn"
+    # -- Size of every replica's PVC.
     size: "50Gi"
+    # -- PVC access mode.
     accessMode: ReadWriteOnce
 
+  # -- Resource requests / limits forwarded to every MongoDB pod.
   resources:
     requests:
       cpu: "4"
@@ -168,14 +237,17 @@ mongodb:
       memory: "8Gi"
 
   metrics:
+    # -- Enable the metrics exporter sidecar from the subchart.
     enabled: false
 
-  # Chart-native extension point (documented in cloudpirates/mongodb README).
-  # In replicaSet mode the chart only creates the headless service (mongodb-headless).
-  # The microservice startup scripts perform a TCP health-check against "mongodb:27017"
-  # before Spring Boot starts.  We add a regular ClusterIP service via extraObjects so
-  # that name resolves – Spring Boot itself connects via SPRING_DATA_MONGODB_HOST which
-  # points to the headless service for full replica-set topology awareness.
+  # -- Chart-native extension point (documented in cloudpirates/mongodb
+  # README). In replicaSet mode the subchart only creates the headless
+  # service (`mongodb-headless`). The microservice startup scripts perform a
+  # TCP health-check against `mongodb:27017` before Spring Boot starts, so
+  # we add a regular ClusterIP service via `extraObjects` to make that name
+  # resolve. Spring Boot itself connects via `SPRING_DATA_MONGODB_HOST`,
+  # which still points at the headless service for full replica-set
+  # topology awareness.
   extraObjects:
     - apiVersion: v1
       kind: Service
@@ -193,80 +265,100 @@ mongodb:
             targetPort: 27017
             protocol: TCP
 
-# RabbitMQ Configuration
-#
-# Single-node deployment by design.
-#
-# A multi-node RabbitMQ cluster only delivers HA when ALL of these are in
+# -- Bundled cloudpirates/rabbitmq subchart. Single-node by design: a
+# multi-node RabbitMQ cluster only delivers HA when ALL of these are in
 # place:
-#   1. Quorum queues (default_queue_type = quorum) – classic mirrored
+#   1. Quorum queues (`default_queue_type = quorum`) – classic mirrored
 #      queues were removed in RabbitMQ 4.0, so quorum (or streams) is the
 #      only replicated queue type left. This also requires the Helmut4
 #      services to either declare quorum queues explicitly or rely on the
-#      default_queue_type setting.
-#   2. Per-pod persistent storage – without it the Mnesia metadata and
-#      any quorum-queue Raft state are wiped on every pod restart.
+#      `default_queue_type` setting.
+#   2. Per-pod persistent storage – without it the Mnesia metadata and any
+#      quorum-queue Raft state are wiped on every pod restart.
 #   3. podAntiAffinity – otherwise multiple rabbitmq pods can land on the
-#      same Kubernetes node and a single node loss takes the cluster
-#      below quorum.
+#      same Kubernetes node and a single node loss takes the cluster below
+#      quorum.
 #   4. A PodDisruptionBudget – to keep node drains from doing the same.
-#
 # Without those four pieces a 3-node cluster shares topology (publish to
 # any node, consume from any node), but each message still lives on the
 # single node that owns its classic queue – so a node loss makes that
-# queue unavailable. That is the same failure mode as a single node, with
-# more moving parts and split-brain risk on top.
-#
-# Until those four pieces are added, one node is more honest than three.
+# queue unavailable. Same failure mode as a single node, with more moving
+# parts and split-brain risk on top. Until those four pieces are added,
+# one node is more honest than three.
 rabbitmq:
+  # -- Subchart release name override (controls Service/StatefulSet names).
   fullnameOverride: "rabbitmq"
+  # -- Number of RabbitMQ pods. Keep at `1` until quorum queues +
+  # persistence + podAntiAffinity + PDB are all in place; see the
+  # block comment above for the reasoning.
   replicaCount: 1
 
   auth:
+    # -- RabbitMQ user.
     username: "root"
+    # -- RabbitMQ password. Replace before exposing the service.
     password: "***REMOVED***"
+    # -- Erlang cookie used by the cluster nodes. Replace before exposing.
     erlangCookie: "***REMOVED***"
+    # -- Key inside the existing Secret that holds the Erlang cookie.
     existingErlangCookieKey: "erlang-cookie"
+    # -- Key inside the existing Secret that holds the password.
     existingPasswordKey: "password"
 
-  # K8s peer discovery is only meaningful in a multi-node cluster. Disable
-  # it for the single-node deployment so the pod does not waste cycles
-  # looking for peers it will never find.
+  # -- K8s peer discovery is only meaningful in a multi-node cluster.
+  # Disabled for the single-node deployment so the pod does not waste
+  # cycles looking for peers it will never find.
   peerDiscoveryK8sPlugin:
+    # -- Enable the rabbitmq_peer_discovery_k8s plugin.
     enabled: false
+    # -- Address type used to discover peers (`hostname` or `ip`).
     addressType: hostname
 
   rbac:
+    # -- Render Role / RoleBinding for the RabbitMQ pods.
     create: true
   serviceAccount:
+    # -- Render a dedicated ServiceAccount for the RabbitMQ pods.
     create: true
 
   service:
+    # -- Service type for the RabbitMQ Service. The parent Ingress fronts
+    # the WebSocket path, so a ClusterIP is enough.
     type: ClusterIP
 
+  # -- PVC settings for the RabbitMQ data directory. Disabled for the
+  # single-node deployment; flip to `enabled: true` (and add a real
+  # storageClass / size) before scaling out – see the block comment above
+  # this `rabbitmq` section.
   persistence:
     enabled: false
 
   metrics:
+    # -- Enable the Prometheus exporter shipped with the subchart.
     enabled: false
 
-  # Disable the subchart's own Ingress – routing is handled by the parent application ingress
+  # -- Disable the subchart's own Ingress – routing is handled by the
+  # parent application Ingress (`appIngress`).
   ingress:
     enabled: false
     tls: []
 
-  # Webstomp configuration for Ingress
+  # -- Port the parent application Ingress targets for the
+  # STOMP-over-WebSocket route (`/ws`). Must match the rabbitmq web_stomp
+  # listener configured below.
   webstomp: 15674
 
-  # rabbitmq_web_stomp serves STOMP-over-WebSocket on /ws (port 15674).
-  # rabbitmq_stomp is the underlying dependency – list it explicitly so
-  # enabled_plugins does not rely on transitive resolution.
+  # -- Plugins enabled in addition to the subchart's defaults.
+  # `rabbitmq_web_stomp` serves STOMP-over-WebSocket on `/ws` (port 15674);
+  # `rabbitmq_stomp` is the underlying dependency – list it explicitly so
+  # `enabled_plugins` does not rely on transitive resolution.
   additionalPlugins:
     - rabbitmq_stomp
     - rabbitmq_web_stomp
 
-  # Expose the web_stomp port on the Service (and the container) so the
-  # parent Ingress (/ws -> rabbitmq:15674) has a real upstream to talk to.
+  # -- Extra ports added to the rabbitmq Service AND StatefulSet pod. The
+  # entry below exposes the web_stomp port so the parent Ingress
+  # (`/ws -> rabbitmq:15674`) has a real upstream to talk to.
   extraPorts:
     - name: web-stomp
       port: 15674
@@ -274,15 +366,21 @@ rabbitmq:
       containerPort: 15674
 
   config:
-    # Pin the web_stomp listener; the plugin default is also 15674 but
-    # being explicit avoids surprises on plugin upgrades.
+    # -- Free-form snippet appended to `rabbitmq.conf`. Pins the web_stomp
+    # listener; the plugin default is also `15674` but being explicit
+    # avoids surprises on plugin upgrades.
     extraConfiguration: |
       web_stomp.tcp.port = 15674
 
-# Service replicas
+# -- Default replica count for any microservice that does not set its own
+# `services.<name>.replicas`.
 serviceReplicas: 2
 
-# Service versions and images
+# -- (object) Per-microservice deployment settings. Each key is a service
+# identifier (`hp`, `hw`, `fx`, ...) and shares the same shape:
+# `name`, `image`, `tag`, `port`, `replicas`, `resources` and an optional
+# `volumeMounts` flag that enables the shared `/Volumes/Helmut` mount.
+# Anchors below are resolved from the `versions:` block at the top.
 services:
   hp:
     name: hp
