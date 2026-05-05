@@ -194,9 +194,33 @@ mongodb:
             protocol: TCP
 
 # RabbitMQ Configuration
+#
+# Single-node deployment by design.
+#
+# A multi-node RabbitMQ cluster only delivers HA when ALL of these are in
+# place:
+#   1. Quorum queues (default_queue_type = quorum) – classic mirrored
+#      queues were removed in RabbitMQ 4.0, so quorum (or streams) is the
+#      only replicated queue type left. This also requires the Helmut4
+#      services to either declare quorum queues explicitly or rely on the
+#      default_queue_type setting.
+#   2. Per-pod persistent storage – without it the Mnesia metadata and
+#      any quorum-queue Raft state are wiped on every pod restart.
+#   3. podAntiAffinity – otherwise multiple rabbitmq pods can land on the
+#      same Kubernetes node and a single node loss takes the cluster
+#      below quorum.
+#   4. A PodDisruptionBudget – to keep node drains from doing the same.
+#
+# Without those four pieces a 3-node cluster shares topology (publish to
+# any node, consume from any node), but each message still lives on the
+# single node that owns its classic queue – so a node loss makes that
+# queue unavailable. That is the same failure mode as a single node, with
+# more moving parts and split-brain risk on top.
+#
+# Until those four pieces are added, one node is more honest than three.
 rabbitmq:
   fullnameOverride: "rabbitmq"
-  replicaCount: 3
+  replicaCount: 1
 
   auth:
     username: "root"
@@ -205,8 +229,11 @@ rabbitmq:
     existingErlangCookieKey: "erlang-cookie"
     existingPasswordKey: "password"
 
+  # K8s peer discovery is only meaningful in a multi-node cluster. Disable
+  # it for the single-node deployment so the pod does not waste cycles
+  # looking for peers it will never find.
   peerDiscoveryK8sPlugin:
-    enabled: true
+    enabled: false
     addressType: hostname
 
   rbac:

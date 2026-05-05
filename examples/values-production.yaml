@@ -71,9 +71,12 @@ mongodb:
       cpu: "4"
       memory: "8Gi"
 
-# RabbitMQ – 3-node cluster
+# RabbitMQ – single node (see helmut4/values.yaml for why we don't run a
+# cluster: HA in RabbitMQ 4.x needs quorum queues + persistence +
+# podAntiAffinity + PDB, and without all four a 3-node cluster has the
+# same failure mode as one node with more moving parts).
 rabbitmq:
-  replicaCount: 3
+  replicaCount: 1
   auth:
     username: "root"
     password: "CHANGE_ME"
