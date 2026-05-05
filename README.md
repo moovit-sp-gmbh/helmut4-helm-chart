@@ -35,7 +35,7 @@ cd helmut4-helm-chart
 All configuration belongs in `install-values.yaml` — no `--set` flags needed:
 
 ```yaml
-ingress:
+appIngress:
   domain: "helmut.your-domain.com"
 
 docker:
@@ -125,7 +125,7 @@ rabbitmq:
 ### Ingress & TLS
 
 ```yaml
-ingress:
+appIngress:
   enabled: true
   className: "nginx"
   domain: "helmut.your-domain.com"

@@ -14,7 +14,7 @@ Make sure the following tools are installed and configured:
 Create your `install-values.yaml` with cluster-specific settings:
 
 ```yaml
-ingress:
+appIngress:
   domain: "helmut.your-domain.com"
 
 docker:
@@ -58,7 +58,7 @@ global:
       size: "50Gi"
       source: "//your-server/share/backups"
 
-ingress:
+appIngress:
   enabled: true
   className: "nginx"
   tls:

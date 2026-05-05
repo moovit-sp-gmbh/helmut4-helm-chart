@@ -83,8 +83,8 @@ serviceAccount:
   create: true
   name: helmut4-sa
 
-# Ingress configuration
-ingress:
+# Main application ingress configuration
+appIngress:
   enabled: true
   className: "nginx"
 
@@ -216,6 +216,11 @@ rabbitmq:
 
   metrics:
     enabled: false
+
+  # Disable the subchart's own Ingress – routing is handled by the parent application ingress
+  ingress:
+    enabled: false
+    tls: []
 
   # Webstomp configuration for Ingress
   webstomp: 15674
