@@ -29,7 +29,7 @@ credentials:
 rbac:
   create: true
 
-ingress:
+appIngress:
   enabled: true
   className: "nginx"
   domain: "helmut.example.com"

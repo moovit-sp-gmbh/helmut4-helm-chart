@@ -130,7 +130,7 @@ kubectl apply -f letsencrypt-issuer.yaml
 
 ```yaml
 # In install-values.yaml
-ingress:
+appIngress:
   tls:
     enabled: true
     provider: "letsencrypt"

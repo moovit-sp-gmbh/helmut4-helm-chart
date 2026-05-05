@@ -16,7 +16,7 @@ global:
 rbac:
   create: true
 
-ingress:
+appIngress:
   enabled: true
   className: "nginx"
   domain: "helmut.local"
