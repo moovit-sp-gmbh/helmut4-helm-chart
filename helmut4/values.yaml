@@ -114,13 +114,12 @@ appIngress:
 
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    # WebSocket support – required for RabbitMQ STOMP-over-WS (/ws) and users service (/v1/ws)
+    # WebSocket support – required for RabbitMQ STOMP-over-WS (/ws) and users service (/v1/ws).
+    # ingress-nginx sets Upgrade/Connection headers natively via its $connection_upgrade map;
+    # only timeouts and HTTP/1.1 need to be forced explicitly here.
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection "upgrade";
 
 # Docker Registry Credentials
 docker:
@@ -232,8 +231,26 @@ rabbitmq:
   # Webstomp configuration for Ingress
   webstomp: 15674
 
+  # rabbitmq_web_stomp serves STOMP-over-WebSocket on /ws (port 15674).
+  # rabbitmq_stomp is the underlying dependency – list it explicitly so
+  # enabled_plugins does not rely on transitive resolution.
   additionalPlugins:
+    - rabbitmq_stomp
     - rabbitmq_web_stomp
+
+  # Expose the web_stomp port on the Service (and the container) so the
+  # parent Ingress (/ws -> rabbitmq:15674) has a real upstream to talk to.
+  extraPorts:
+    - name: web-stomp
+      port: 15674
+      targetPort: 15674
+      containerPort: 15674
+
+  config:
+    # Pin the web_stomp listener; the plugin default is also 15674 but
+    # being explicit avoids surprises on plugin upgrades.
+    extraConfiguration: |
+      web_stomp.tcp.port = 15674
 
 # Service replicas
 serviceReplicas: 2
