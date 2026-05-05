@@ -175,7 +175,8 @@ spec:
                 port:
                   number: {{ .Values.services.language.port }}
           
-          # RabbitMQ WebStomp
+          # RabbitMQ WebStomp (STOMP over WebSocket – wss://<domain>/ws)
+          # Requires WebSocket proxy annotations set on this Ingress (see appIngress.annotations)
           - path: /ws
             pathType: Prefix
             backend:
