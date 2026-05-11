@@ -1,43 +1,53 @@
 #!/bin/bash
+#
+# Helmut4 backup helper
+#
+# Usage:
+#   ./backup.sh [NAMESPACE] [BACKUP_DIR]
+#
+# Reads MongoDB credentials from the cluster (mongodb-credentials Secret)
+# so nothing sensitive lives in this script. Pass MONGODB_USER /
+# MONGODB_PASSWORD as env vars to override.
 
-# Helmut4 Backup Script
-# Erstellt Backups der Datenbanken
+set -euo pipefail
 
-NAMESPACE=${1:-helmut4}
-BACKUP_DIR=${2:-./backups}
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+NAMESPACE="${1:-helmut4}"
+BACKUP_DIR="${2:-./backups}"
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 
-mkdir -p $BACKUP_DIR
+mkdir -p "$BACKUP_DIR"
 
-echo "Creating backups for Helmut4..."
+echo "Creating backups for Helmut4 (namespace: $NAMESPACE)..."
 
-# MongoDB Backup
-echo "Backing up MongoDB..."
-kubectl exec -n $NAMESPACE mongodb-0 -- mongodump \
-  -u root -p bitte \
-  --authenticationDatabase admin \
-  --out /tmp/mongodb-backup-$TIMESTAMP
+# --- MongoDB ----------------------------------------------------------------
+# Pull credentials out of the Secret the chart creates (or that the
+# subchart creates when mongodb.auth.existingSecret is set).
+MONGODB_USER="${MONGODB_USER:-$(kubectl -n "$NAMESPACE" get secret mongodb-credentials \
+  -o jsonpath='{.data.username}' 2>/dev/null | base64 -d || echo root)}"
 
-kubectl cp $NAMESPACE/mongodb-0:/tmp/mongodb-backup-$TIMESTAMP $BACKUP_DIR/mongodb-$TIMESTAMP
+MONGODB_PASSWORD="${MONGODB_PASSWORD:-$(kubectl -n "$NAMESPACE" get secret mongodb-credentials \
+  -o jsonpath='{.data.mongodb-root-password}' 2>/dev/null | base64 -d)}"
 
-# RabbitMQ Definitions
-echo "Exporting RabbitMQ definitions..."
-kubectl exec -n $NAMESPACE -it rabbitmq-0 -- \
-  rabbitmqctl export_definitions - > $BACKUP_DIR/rabbitmq-definitions-$TIMESTAMP.json || true
-
-# Elasticsearch Data (falls aktiv)
-if kubectl get pod -n $NAMESPACE -l app=elasticsearch &> /dev/null; then
-  echo "Backing up Elasticsearch..."
-  kubectl port-forward -n $NAMESPACE svc/elasticsearch 9200:9200 &
-  sleep 2
-  curl -X PUT http://localhost:9200/_snapshot/local \
-    -H "Content-Type: application/json" \
-    -d '{"type": "fs", "settings": {"location": "/backup"}}'
-  curl -X PUT http://localhost:9200/_snapshot/local/backup-$TIMESTAMP \
-    -H "Content-Type: application/json" \
-    -d '{}' || true
-  kill %1
+if [ -z "${MONGODB_PASSWORD:-}" ]; then
+  echo "ERROR: could not resolve MongoDB password. Set MONGODB_PASSWORD or" \
+       "create the mongodb-credentials Secret in namespace $NAMESPACE." >&2
+  exit 1
 fi
 
+echo "Backing up MongoDB..."
+kubectl exec -n "$NAMESPACE" mongodb-0 -- mongodump \
+  -u "$MONGODB_USER" -p "$MONGODB_PASSWORD" \
+  --authenticationDatabase admin \
+  --out "/tmp/mongodb-backup-$TIMESTAMP"
+
+kubectl cp "$NAMESPACE/mongodb-0:/tmp/mongodb-backup-$TIMESTAMP" \
+  "$BACKUP_DIR/mongodb-$TIMESTAMP"
+
+# --- RabbitMQ definitions ---------------------------------------------------
+echo "Exporting RabbitMQ definitions..."
+kubectl exec -n "$NAMESPACE" rabbitmq-0 -- \
+  rabbitmqctl export_definitions - \
+  > "$BACKUP_DIR/rabbitmq-definitions-$TIMESTAMP.json" || true
+
 echo "Backups created in $BACKUP_DIR"
-ls -lh $BACKUP_DIR/
+ls -lh "$BACKUP_DIR/"
