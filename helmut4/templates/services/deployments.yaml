@@ -39,6 +39,10 @@ spec:
       app: {{ $service.name }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $root | sha256sum }}
+        checksum/rabbitmq-auth: {{ printf "%s:%s" ($root.Values.rabbitmq.auth.username | toString) ($root.Values.rabbitmq.auth.password | toString) | sha256sum }}
+        checksum/mongodb-auth: {{ printf "%s:%s" ($root.Values.mongodb.auth.rootUsername | toString) ($root.Values.mongodb.auth.rootPassword | toString) | sha256sum }}
       labels:
         app: {{ $service.name }}
         {{- include "helmut4.labels" $root | nindent 8 }}
