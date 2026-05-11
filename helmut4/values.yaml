@@ -321,11 +321,16 @@ rabbitmq:
   replicaCount: 1
 
   auth:
-    # -- RabbitMQ user. The Helmut4 frontend ships with `admin` baked in
-    # for the STOMP-over-WebSocket connection (browser → `/ws`), so this
-    # must stay `admin` unless you can also rebuild the frontend bundle.
-    username: "admin"
-    # -- RabbitMQ password. Replace before exposing the service.
+    # -- Internal RabbitMQ user used by the Spring microservices. The
+    # browser-side STOMP connection authenticates a different way (see
+    # `config.extraConfiguration` below — the `rabbit_auth_backend_http`
+    # plugin forwards STOMP CONNECT credentials to the `users` service
+    # so logged-in panel users authenticate against the Helmut user
+    # store in MongoDB). This value only needs to match what the chart
+    # injects via `SPRING_RABBITMQ_USERNAME`.
+    username: "root"
+    # -- RabbitMQ password for the internal `username` user. Replace
+    # before exposing the service.
     password: "***REMOVED***"
     # -- Erlang cookie used by the cluster nodes. Replace before exposing.
     erlangCookie: "***REMOVED***"
@@ -381,9 +386,12 @@ rabbitmq:
   # `rabbitmq_web_stomp` serves STOMP-over-WebSocket on `/ws` (port 15674);
   # `rabbitmq_stomp` is the underlying dependency – list it explicitly so
   # `enabled_plugins` does not rely on transitive resolution.
+  # `rabbitmq_auth_backend_http` lets RabbitMQ delegate auth lookups to
+  # the `users` microservice (the Helmut frontend STOMP CONNECT path).
   additionalPlugins:
     - rabbitmq_stomp
     - rabbitmq_web_stomp
+    - rabbitmq_auth_backend_http
 
   # -- Extra ports added to the rabbitmq Service AND StatefulSet pod. The
   # entry below exposes the web_stomp port so the parent Ingress
@@ -395,11 +403,33 @@ rabbitmq:
       containerPort: 15674
 
   config:
-    # -- Free-form snippet appended to `rabbitmq.conf`. Pins the web_stomp
-    # listener; the plugin default is also `15674` but being explicit
-    # avoids surprises on plugin upgrades.
+    # -- Free-form snippet appended to `rabbitmq.conf`.
+    #
+    # Two things are pinned here:
+    #
+    # 1. `web_stomp.tcp.port = 15674` — the plugin default is also
+    #    15674, but being explicit avoids surprises on plugin upgrades.
+    #
+    # 2. The auth_backends chain. The Spring microservices authenticate
+    #    against the internal user (`auth.username`/`auth.password`
+    #    above). The Helmut panel's STOMP-over-WS connection uses the
+    #    logged-in panel user's credentials, which don't exist in
+    #    RabbitMQ's internal user table — so we fall through to the
+    #    `rabbit_auth_backend_http` plugin, which POSTs the credentials
+    #    to the `users` microservice for validation against the Helmut
+    #    user store in MongoDB. The four HTTP endpoints below mirror
+    #    what moovit's `mcc_rabbitmq` image preloads, so the chart
+    #    behaves like the canonical docker-compose deployment.
     extraConfiguration: |
       web_stomp.tcp.port = 15674
+
+      auth_backends.1 = internal
+      auth_backends.2 = rabbit_auth_backend_http
+      auth_http.http_method   = post
+      auth_http.user_path     = http://users:8000/v1/members/auth/rabbitmq/user
+      auth_http.vhost_path    = http://users:8000/v1/members/auth/rabbitmq/vhost
+      auth_http.resource_path = http://users:8000/v1/members/auth/rabbitmq/resource
+      auth_http.topic_path    = http://users:8000/v1/members/auth/rabbitmq/topic
 
 # -- Default replica count for any microservice that does not set its own
 # `services.<name>.replicas`. Ignored when `autoscaling.enabled` is true.
