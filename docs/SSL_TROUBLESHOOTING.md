@@ -1,48 +1,79 @@
-# SSL / Cert-Manager Troubleshooting
+# SSL / cert-manager troubleshooting
 
-## Problem: Certificate Issuance Stuck (Self-Check Failed)
+## Problem: certificate issuance stuck (self-check failed)
 
-Wenn Zertifikate im Status `Pending` hängen bleiben und die Challenge folgenden Fehler zeigt:
+If certificates stay in `Pending` and the challenge reports something like:
 
 ```
-Reason: Waiting for HTTP-01 challenge propagation: failed to perform self check GET request ... context deadline exceeded
+Reason: Waiting for HTTP-01 challenge propagation: failed to perform self
+check GET request ... context deadline exceeded
 ```
 
-### Ursache
-Der `cert-manager` versucht vor der eigentlichen Validierung durch Let's Encrypt einen "Self-Check". Er ruft die Domain (z.B. `hc-uploader-test.moovit24.de`, `helmut-k8s.moovit24.de`) von innerhalb des Clusters auf.
-In vielen On-Premise oder lokalen Setups (wie Rancher auf VMs) funktioniert **NAT Loopback** nicht korrekt. Das heißt, der Pod kann die öffentliche IP der Domain nicht erreichen.
+### Cause
 
-### Lösung: HostAlias Patch
+Before delegating validation to Let's Encrypt, `cert-manager` runs a
+"self-check" — it tries to reach the public hostname (e.g.
+`helmut-k8s.example.com`) **from inside the cluster**.
 
-Anstatt den Self-Check zu deaktivieren (was oft zu Abstürzen führt, da Flags veraltet sind), zwingen wir den `cert-manager`, die Domain lokal aufzulösen.
+On many on-premise or homelab setups (e.g. Rancher running on a few VMs),
+**NAT loopback** doesn't work: a pod resolving the public IP of the
+cluster's own hostname can't actually route to it. The self-check times
+out and the issuance never starts.
 
-Wir fügen einen `hostAlias` zum `cert-manager` Deployment hinzu, der die Domain auf die interne IP des Ingress-Controllers (oder die Node-IP) mappt.
+### Fix: `hostAliases` patch
 
-#### 1. Ingress IP / Node IP finden
-Finde heraus, auf welcher IP der Ingress-Controller lauscht:
+Instead of disabling the self-check (the flag for that has moved several
+times across cert-manager versions and tends to break on upgrades), force
+cert-manager to resolve the hostname **locally** to the ingress
+controller / node IP. A `hostAliases` entry on the cert-manager Deployment
+does exactly that.
+
+#### 1. Find the ingress / node IP
+
 ```bash
+# Whichever address the ingress controller listens on:
 kubectl get svc -n kube-system | grep ingress
-# oder
+# …or, if the controller binds the node IP directly:
 kubectl get nodes -o wide
 ```
-(In diesem Fall war es die Node-IP `10.10.10.46`).
 
-#### 2. Cert-Manager patchen
-Führe folgenden Befehl aus, um das Mapping hinzuzufügen (ersetze IP und Domain):
+#### 2. Patch cert-manager
 
-```bash
-kubectl patch deployment cert-manager -n cert-manager --type='json' -p='[{"op": "replace", "path": "/spec/template/spec/hostAliases", "value": [{"ip": "10.10.10.46", "hostnames": ["vulcano-test.moovit24.de", "vulcano-k8s.moovit24.de", "bildergarten.moovit24.de", "rtl.moovit24.de", "zdf.moovit24.de", "hc-uploader-test.moovit24.de", "helmut-k8s.moovit24.de", "helmut4-k8s.moovit24.de", "eu-central-1.hcu.hlmc.io", "eu-rc-1.hcu.hlmc.io", "eu-dev-1.hcu.hlmc.io"]}]}]'
-```
-
-#### 3. Zertifikat neu anfordern
-Lösche das hängende Zertifikat, damit der Prozess neu startet:
+Replace `<NODE_IP>` with the IP from step 1 and list every hostname you
+issue certificates for. The patch **replaces** any existing `hostAliases`
+entry, so include all of them in a single patch:
 
 ```bash
-kubectl delete certificate hc-video-server-tls -n moovit
+kubectl patch deployment cert-manager -n cert-manager \
+  --type='json' \
+  -p='[{
+    "op": "replace",
+    "path": "/spec/template/spec/hostAliases",
+    "value": [
+      {
+        "ip": "<NODE_IP>",
+        "hostnames": [
+          "helmut-k8s.example.com",
+          "<other-host>.example.com"
+        ]
+      }
+    ]
+  }]'
 ```
 
-### Überprüfung
+#### 3. Re-issue the certificate
+
+Delete the stuck Certificate object so cert-manager starts a fresh
+issuance:
+
 ```bash
-kubectl get certificate -n moovit
+kubectl delete certificate helmut4-tls -n helmut4
 ```
-Der Status sollte nach kurzer Zeit auf `True` wechseln.
+
+### Verify
+
+```bash
+kubectl get certificate -n helmut4
+```
+
+The `READY` column should flip to `True` within a minute or two.
