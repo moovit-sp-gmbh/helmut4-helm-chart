@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint-and-template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        run: curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Install helm-docs
+        run: |
+          curl -fsSL -o /tmp/helm-docs.tgz \
+            https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_x86_64.tar.gz
+          tar -xzf /tmp/helm-docs.tgz -C /tmp helm-docs
+          sudo install /tmp/helm-docs /usr/local/bin/helm-docs
+
+      - name: Install kubeconform
+        run: |
+          curl -fsSL -o /tmp/kubeconform.tgz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.4/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tgz -C /tmp kubeconform
+          sudo install /tmp/kubeconform /usr/local/bin/kubeconform
+
+      - name: Helm dependencies
+        run: helm dependency update ./helmut4
+
+      - name: helm lint (default values)
+        run: helm lint ./helmut4 --strict
+
+      - name: helm lint (each example)
+        run: |
+          for f in examples/values-*.yaml; do
+            echo "=== linting against $f ==="
+            helm lint ./helmut4 -f "$f" --strict
+          done
+
+      - name: helm-docs check (README.md matches values.yaml)
+        run: |
+          helm-docs --chart-search-root helmut4
+          git diff --exit-code -- helmut4/README.md || {
+            echo "::error::helmut4/README.md is out of sync with values.yaml. Run 'helm-docs --chart-search-root helmut4' locally and commit the result."
+            exit 1
+          }
+
+      - name: helm template + kubeconform (default + each example)
+        run: |
+          set -e
+          mkdir -p /tmp/rendered
+          helm template helmut4 ./helmut4 > /tmp/rendered/default.yaml
+          for f in examples/values-*.yaml; do
+            name=$(basename "$f" .yaml)
+            helm template helmut4 ./helmut4 -f "$f" > "/tmp/rendered/${name}.yaml"
+          done
+          for r in /tmp/rendered/*.yaml; do
+            echo "=== kubeconform: $r ==="
+            kubeconform -ignore-missing-schemas -kubernetes-version 1.31.0 -summary "$r"
+          done
