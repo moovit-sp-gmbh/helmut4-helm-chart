@@ -78,6 +78,25 @@ global:
   imagePullSecrets:
     - name: docker-registry-secret-json
 
+  # -- (object) Pod-level `securityContext` applied to every Deployment
+  # the chart renders. Leave empty to keep cluster defaults; populate
+  # when the platform requires non-root execution or a specific `fsGroup`
+  # so the mounted PVCs are writable. Example:
+  #   runAsNonRoot: true
+  #   runAsUser: 999
+  #   fsGroup: 999  # match the SMB mountOptions (uid=999, gid=999)
+  podSecurityContext: {}
+
+  # -- (object) Container-level `securityContext` applied to every
+  # container the chart renders. Leave empty for cluster defaults.
+  # Common hardening (only enable after verifying the Helmut4 services
+  # actually run with these constraints):
+  #   allowPrivilegeEscalation: false
+  #   readOnlyRootFilesystem: false  # Spring Boot writes to /tmp
+  #   capabilities:
+  #     drop: ["ALL"]
+  containerSecurityContext: {}
+
   storage:
     # -- CSI driver that backs the application file storage (e.g.
     # `smb.csi.k8s.io`, `nfs.csi.k8s.io`). The chart only references the

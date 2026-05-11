@@ -105,6 +105,16 @@
             "properties": { "name": { "type": "string", "minLength": 1 } }
           }
         },
+        "podSecurityContext": {
+          "type": "object",
+          "description": "Pod-level securityContext applied to every Deployment. Empty object keeps cluster defaults.",
+          "additionalProperties": true
+        },
+        "containerSecurityContext": {
+          "type": "object",
+          "description": "Container-level securityContext applied to every container. Empty object keeps cluster defaults.",
+          "additionalProperties": true
+        },
         "storage": {
           "type": "object",
           "description": "Cluster-wide CSI/StorageClass settings. Each entry in `volumes` gets its own StorageClass and PVC.",

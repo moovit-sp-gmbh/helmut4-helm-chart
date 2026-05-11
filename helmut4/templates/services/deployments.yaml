@@ -46,11 +46,19 @@ spec:
         {{- toYaml $root.Values.global.imagePullSecrets | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "helmut4.serviceAccountName" $root }}
-      
+      {{- with $root.Values.global.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
       containers:
         - name: {{ $service.name }}
           image: "{{ $root.Values.global.registry }}/{{ $service.image }}:{{ $service.tag }}"
           imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          {{- with $root.Values.global.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- if $service.port }}
           ports:
             - containerPort: {{ $service.port }}
