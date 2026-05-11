@@ -321,8 +321,10 @@ rabbitmq:
   replicaCount: 1
 
   auth:
-    # -- RabbitMQ user.
-    username: "root"
+    # -- RabbitMQ user. The Helmut4 frontend ships with `admin` baked in
+    # for the STOMP-over-WebSocket connection (browser → `/ws`), so this
+    # must stay `admin` unless you can also rebuild the frontend bundle.
+    username: "admin"
     # -- RabbitMQ password. Replace before exposing the service.
     password: "***REMOVED***"
     # -- Erlang cookie used by the cluster nodes. Replace before exposing.
