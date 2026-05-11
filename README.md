@@ -1,8 +1,8 @@
 # Helmut4 Helm Chart
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![GitHub Release](https://img.shields.io/github/v/release/moovit-sp-gmbh/helmut4-helm-chart?include_prereleases&sort=semver)](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/releases)
-[![CI](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/actions/workflows/ci.yml/badge.svg)](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/actions/workflows/ci.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/moovit-sp-gmbh/helmut4-helm-chart?include_prereleases)](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/releases)
+[![CI](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/actions/workflows/ci.yml)
 
 A complete Helm chart for the Helmut4 microservices application — MongoDB replica set, RabbitMQ with HTTP-backend auth wired to the Helmut user store, the full microservice fleet, an nginx Ingress with WebSTOMP, and an optional multi-volume storage layer that backs onto SMB / NFS / cloud CSI drivers.
 
