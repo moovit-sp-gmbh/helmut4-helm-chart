@@ -1,70 +1,84 @@
 # Storage Migration Guide
 
-Bei der Migration von Docker Compose zu Kubernetes kannst du bestehende Netzwerk-Shares (SMB, NFS, etc.) wiederverwenden. Das Chart konfiguriert automatisch PVCs, die auf existierende externe Shares zeigen.
+When migrating from Docker Compose to Kubernetes, you can keep using your
+existing network shares (SMB, NFS, …). The chart provisions the necessary
+StorageClasses and PVCs to point at those shares rather than allocating
+fresh block storage.
 
-## Übersicht
+## Overview
 
 ```
 Docker Compose:                    Kubernetes:
-/Volumes (Host-Mount)      ====>   SMB/NFS Share
-MongoDB Backups            ====>   SMB/NFS Share
-                                   
-                                   ↓ CSI Driver
+/Volumes (host bind mount)  ====>  SMB/NFS share
+
+                                   ↓ CSI driver
                                    ↓
                                    StorageClass
                                    ↓
-                                   PVC (neu)
+                                   PVC (new)
                                    ↓
-                                   Pod mounts zu /Volumes
+                                   Pod mounts /Volumes/Helmut
 ```
 
 ---
 
-## Scenario: SMB-Share Migration
+## Scenario: SMB share migration
 
-### Schritt 1: CSI-Treiber installieren
+### Step 1 — install the CSI driver
 
 ```bash
-# SMB CSI Driver (Azure)
-helm repo add smb-csi-driver https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/master/charts
+# SMB CSI driver (Azure)
+helm repo add smb-csi-driver \
+  https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/master/charts
 helm install csi-driver-smb smb-csi-driver/csi-driver-smb \
   --namespace kube-system
 
-# NFS CSI Driver (alternativ)
-helm repo add nfs-subdir-external-provisioner https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
-helm install nfs-subdir-external-provisioner nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
+# NFS CSI driver (alternative)
+helm repo add nfs-subdir-external-provisioner \
+  https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
+helm install nfs-subdir-external-provisioner \
+  nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
   --namespace kube-system \
   --set nfs.server=nfs-server.example.com \
   --set nfs.path=/exports
 ```
 
-### Schritt 2: Credentials für SMB-Share erstellen (falls nötig)
+### Step 2 — create SMB credentials (if required)
 
 ```bash
-# Für SMB: Secret mit Username/Password erstellen
+# Either populate the chart values (preferred — let the chart create the
+# Secret as part of the release):
+#
+#   credentials:
+#     storage:
+#       smb:
+#         username: "admin"
+#         password: "..."
+#
+# Or create the Secret out-of-band:
 kubectl create secret generic smb-creds \
   --from-literal=username=admin \
   --from-literal=password=your-password \
   -n helmut4
-
-# Optional: In values.yaml für Storage-Klasse konfigurieren
 ```
 
-### Schritt 3: values-migration-pv-names.yaml anpassen
+### Step 3 — adapt `values-migration-pv-names.yaml`
 
 ```yaml
 global:
   storage:
-    csiDriver: "smb.csi.k8s.io"          # SMB CSI Driver
+    csiDriver: "smb.csi.k8s.io"          # SMB CSI driver
     storageClassName: "helmut4-csi-storage"
-    
-    volume:
-      size: "100Gi"
-      # Bestehender SMB-Share (von Docker)
-      source: "//storage-server.local/helmut-volumes"
+    volumes:
+      - name: helmut-storage
+        mountPath: "/Volumes/Helmut"
+        size: "100Gi"
+        # Existing SMB share (from the Docker Compose deployment)
+        source: "//storage-server.local/helmut-volumes"
+        appMount: true
 ```
 
-### Schritt 4: Helm installieren
+### Step 4 — install via Helm
 
 ```bash
 helm install helmut4 helmut4/ \
@@ -73,15 +87,15 @@ helm install helmut4 helmut4/ \
   --create-namespace
 ```
 
-### Schritt 5: Verifikation
+### Step 5 — verify
 
 ```bash
-# PVCs erstellt?
+# PVCs bound?
 kubectl -n helmut4 get pvc
 # NAME                   STATUS  VOLUME              CAPACITY
-# helmut-storage-pvc     Bound   pvc-xxx             100Gi
+# helmut-storage-pvc     Bound   pvc-...             100Gi
 
-# Pods mit Volume gemountet?
+# Pods seeing the volume?
 kubectl -n helmut4 get pods -o wide
 kubectl -n helmut4 exec <pod> -- mount | grep helmut
 kubectl -n helmut4 exec <pod> -- ls -la /Volumes
@@ -89,32 +103,33 @@ kubectl -n helmut4 exec <pod> -- ls -la /Volumes
 
 ---
 
-## Scenario: NFS-Share Migration
+## Scenario: NFS share migration
 
-### Schritt 1: NFS CSI Driver installieren
+### Step 1 — install the NFS CSI driver
 
 ```bash
 helm repo add nfs-subdir-external-provisioner \
   https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
 
-helm install nfs-provisioner nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
+helm install nfs-provisioner \
+  nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
   --namespace kube-system \
   --set nfs.server=nfs-server.example.com \
   --set nfs.path=/exports/helmut
 ```
 
-### Schritt 2: values.yaml konfigurieren
+### Step 2 — configure `values.yaml`
 
 ```yaml
 global:
   storage:
-    csiDriver: "nfs.csi.k8s.io"         # NFS CSI Driver
+    csiDriver: "nfs.csi.k8s.io"         # NFS CSI driver
     storageClassName: "nfs-helmut"
     volumes:
       - name: helmut-storage
         mountPath: "/Volumes/Helmut"
         size: "100Gi"
-        # NFS-Share im Format: server:/path
+        # NFS share, format: server:/path
         source: "nfs-server.example.com:/exports/helmut-volumes"
         appMount: true
       - name: mongobackup
@@ -124,7 +139,7 @@ global:
         appMount: false
 ```
 
-### Schritt 3: Installieren
+### Step 3 — install
 
 ```bash
 helm install helmut4 helmut4/ \
@@ -135,25 +150,26 @@ helm install helmut4 helmut4/ \
 
 ---
 
-## Scenario: Ohne externe Shares (Dynamisches Provisioning)
+## Scenario: no external share (dynamic provisioning)
 
-Falls du keine externen Shares hast und Kubernetes dynamisch Storage erstellen lässt:
+If you don't have an existing share and want Kubernetes to allocate storage
+dynamically:
 
 ```yaml
 global:
   storage:
-    csiDriver: "pd.csi.storage.gke.io"   # GKE, Azure, AWS CSI driver
+    csiDriver: "pd.csi.storage.gke.io"   # GKE / Azure / AWS CSI driver
     storageClassName: "helmut4-csi-storage"
     volumes:
       - name: helmut-storage
         mountPath: "/Volumes/Helmut"
         size: "100Gi"
-        source: ""                        # Leer = dynamisch provisioned
+        source: ""                        # empty source = dynamic provisioning
         appMount: true
       - name: mongobackup
         mountPath: "/Volumes/Backup"
         size: "50Gi"
-        source: ""                        # Leer = dynamisch provisioned
+        source: ""                        # empty source = dynamic provisioning
         appMount: false
 ```
 
@@ -161,25 +177,24 @@ global:
 
 ## Troubleshooting
 
-### PVC bleibt Pending
+### PVC stuck in `Pending`
 
 ```bash
 kubectl -n helmut4 describe pvc helmut-storage-pvc
 
-# Ursachen:
-# 1. CSI Driver nicht installiert
+# Likely causes:
+# 1. CSI driver not installed
 kubectl get csinode
 kubectl get storageclass
 
-# 2. Share nicht erreichbar
+# 2. Share unreachable
 kubectl -n kube-system logs -l app.kubernetes.io/name=csi-driver-smb
 
-# 3. Credentials falsch
-# Überprüfe Secret:
+# 3. Wrong credentials — inspect the Secret:
 kubectl get secret smb-creds -n kube-system -o yaml
 ```
 
-### Pod kann Volume nicht mounten
+### Pod cannot mount the volume
 
 ```bash
 # Pod logs
@@ -188,93 +203,91 @@ kubectl -n helmut4 logs <pod> -c <container>
 # Events
 kubectl -n helmut4 describe pod <pod>
 
-# CSI Driver Logs
+# CSI driver logs
 kubectl -n kube-system logs -l app=csi-driver-smb -f
 ```
 
-### Share-Verbindung wird abgebrochen
+### Share connection drops
 
 ```bash
-# Überprüfe Netzwerkverbindung
+# Network reachability
 kubectl -n helmut4 exec <pod> -- ping storage-server.local
 
-# Überprüfe Credentials/Authentifizierung
+# Auth check
 kubectl -n helmut4 exec <pod> -- smbclient -L //storage-server.local
 ```
 
 ---
 
-## Best Practices
+## Best practices
 
-### 1. Share-Größe überprüfen
+### 1. Verify the share has enough free space
 
 ```bash
-# Host: Verfügbaren Platz auf SMB-Share prüfen
+# Host side — check the SMB share size
 net view \\storage-server /share
-# oder mit df (Linux/NFS)
+
+# Linux / NFS
 df -h /mnt/helmut-volumes
 
-# values.yaml sollte < verfügbarem Platz sein
+# The size you declare in values.yaml must be ≤ what the share can serve.
 ```
 
-### 2. Backup vor Migration
+### 2. Back up before migrating
 
 ```bash
-# Data aus Docker Compose Volume kopieren
+# Copy the data out of the Docker Compose volume
 docker run --rm \
   -v helmut-volumes:/data \
   alpine:latest \
   tar czf /backup/helmut-volumes.tar.gz /data
 ```
 
-### 3. Credentials sicher handhaben
+### 3. Handle credentials safely
 
 ```bash
-# Für SMB: Secrets verwenden statt Passwörter in values
+# For SMB: use a Secret rather than committing the password to values.yaml
 kubectl create secret generic smb-migration-creds \
   --from-literal=username=admin \
   --from-literal=password=<password> \
   -n helmut4
 ```
 
-### 4. Performance-Tuning
+### 4. Performance tuning
 
 ```yaml
-# Bei schlechter Performance: Blocksize anpassen
-# (je nach CSI-Treiber unterschiedlich)
-global:
-  storage:
-    # In StorageClass parameters (CSI-spezifisch)
-    # z.B. für SMB: blocksize, caching, etc.
+# Driver-specific parameters belong on the StorageClass.
+# Example knobs (the names are CSI-driver-specific): blocksize,
+# cachingMode, mountOptions[], …
 ```
 
 ### 5. Monitoring
 
 ```bash
-# Storage-Auslastung überwachen
+# Storage utilisation
 kubectl -n helmut4 exec <pod> -- df -h /Volumes
 
-# PVC-Auslastung
+# PVC state
 kubectl -n helmut4 get pvc -w
 
-# Events für Storage-Probleme
+# Storage-related events
 kubectl -n helmut4 get events --sort-by='.lastTimestamp'
 ```
 
 ---
 
-## Rollback bei Problemen
+## Rollback
 
-Falls die Migration nicht funktioniert:
+If the migration doesn't work out:
 
 ```bash
-# Helm Release löschen (PVCs bleiben erhalten)
+# Remove the Helm release (PVCs are retained by default)
 helm uninstall helmut4 -n helmut4
 
-# Docker Compose wieder starten
+# Bring the Docker Compose deployment back up
 docker-compose up -d
 
-# Oder: Änderungen in values korrigieren
+# Or fix the values and try again
 helm upgrade helmut4 helmut4/ \
   -f examples/values-migration-pv-names.yaml \
   -n helmut4
@@ -282,14 +295,14 @@ helm upgrade helmut4 helmut4/ \
 
 ---
 
-## CSI-Treiber Übersicht
+## CSI driver overview
 
-| Storage | CSI Driver | Installation |
-|---------|-----------|--------------|
-| SMB/CIFS | `smb.csi.k8s.io` | Azure CSI Driver |
-| NFS | `nfs.csi.k8s.io` | NFS Subdir Provisioner |
-| GCP Persistent Disk | `pd.csi.storage.gke.io` | GKE default |
-| AWS EBS | `ebs.csi.aws.com` | AWS EBS CSI |
-| Azure Disk | `disk.csi.azure.com` | Azure CSI |
-| Ceph RBD | `rbd.csi.ceph.io` | Ceph Operator |
-| Longhorn | `driver.longhorn.io` | Longhorn |
+| Storage             | CSI driver               | Installation              |
+|---------------------|--------------------------|---------------------------|
+| SMB / CIFS          | `smb.csi.k8s.io`         | Azure CSI driver          |
+| NFS                 | `nfs.csi.k8s.io`         | NFS Subdir Provisioner    |
+| GCP Persistent Disk | `pd.csi.storage.gke.io`  | GKE default               |
+| AWS EBS             | `ebs.csi.aws.com`        | AWS EBS CSI               |
+| Azure Disk          | `disk.csi.azure.com`     | Azure CSI                 |
+| Ceph RBD            | `rbd.csi.ceph.io`        | Ceph operator             |
+| Longhorn            | `driver.longhorn.io`     | Longhorn                  |
