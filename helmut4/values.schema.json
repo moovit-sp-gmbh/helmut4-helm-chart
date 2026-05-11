@@ -107,25 +107,23 @@
         },
         "storage": {
           "type": "object",
-          "description": "Cluster-wide CSI/StorageClass settings plus an open-ended map of shares. Each share follows the `{size, source}` shape; `volume` is the canonical one consumed by the chart, additional keys (e.g. `mongobackup`) can be defined for ancillary mounts.",
-          "additionalProperties": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "size": { "type": "string" },
-              "source": { "type": "string" }
-            }
-          },
+          "description": "Cluster-wide CSI/StorageClass settings. Each entry in `volumes` gets its own StorageClass and PVC.",
           "properties": {
             "csiDriver": { "type": "string" },
             "storageClassName": { "type": "string" },
-            "mountPath": { "type": "string" },
-            "volume": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "size": { "type": "string" },
-                "source": { "type": "string" }
+            "volumes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "mountPath", "size"],
+                "properties": {
+                  "name":      { "type": "string", "minLength": 1 },
+                  "mountPath": { "type": "string", "minLength": 1 },
+                  "size":      { "type": "string", "minLength": 1 },
+                  "source":    { "type": "string" },
+                  "appMount":  { "type": "boolean", "description": "Mount this volume on all services with volumeMounts: true. Set to false for backup-only volumes." }
+                }
               }
             }
           }

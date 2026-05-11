@@ -80,14 +80,22 @@ spec:
           
           {{- if .volumeMounts }}
           volumeMounts:
-            - name: helmut-storage
-              mountPath: /Users/Shared/Helmut24
+            {{- range .Values.global.storage.volumes }}
+            {{- if .appMount }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+            {{- end }}
+            {{- end }}
           {{- end }}
       
       {{- if .volumeMounts }}
       volumes:
-        - name: helmut-storage
+        {{- range .Values.global.storage.volumes }}
+        {{- if .appMount }}
+        - name: {{ .name }}
           persistentVolumeClaim:
-            claimName: helmut-storage-pvc
+            claimName: {{ .name }}-pvc
+        {{- end }}
+        {{- end }}
       {{- end }}
 {{- end }}
