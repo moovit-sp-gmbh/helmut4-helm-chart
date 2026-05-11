@@ -1,1 +1,6 @@
-helmut4/charts/.DS_Store
+.DS_Store
+
+# Site-specific install values – contain real credentials. Use
+# examples/values-*.yaml as templates and copy install-values.yaml from
+# there locally.
+install-values.yaml
