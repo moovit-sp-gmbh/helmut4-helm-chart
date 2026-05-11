@@ -65,7 +65,7 @@ helmut4-helm-chart/
 - 3 replicas (`rs0`) for high availability
 - **Longhorn block storage** (50 Gi per replica) — clean state on reinstall
 - Headless service `mongodb-headless` for RS topology
-- ClusterIP service `mongodb` via `extraObjects` (for scripts and mongobackup)
+- ClusterIP service `mongodb` via `extraObjects` so scripts have a stable address
 - Auth via `rootUsername` / `rootPassword`
 
 ### 3. RabbitMQ StatefulSet (cloudpirates/rabbitmq 0.7.10)
@@ -83,7 +83,7 @@ helmut4-helm-chart/
 - All Spring Boot env vars via `envFrom` (ConfigMap `service-config`)
 - Credentials via `env.valueFrom.secretKeyRef`
 - Health checks (liveness + readiness)
-- Volume mounts for: `fx`, `co`, `io`, `users`, `streams`, `license`, `xmlgenerator`
+- Volume mounts for: `fx`, `co`, `io`, `users`, `streams`, `license`
 
 ### 6. RBAC (namespace-scoped)
 - ServiceAccount, Role, RoleBinding (no ClusterRole)
