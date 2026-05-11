@@ -1,8 +1,13 @@
 # Helmut4 Helm Chart
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![GitHub Release](https://img.shields.io/github/v/release/moovit-sp-gmbh/helmut4-helm-chart?include_prereleases)](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/releases)
+[![Chart](https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/moovit-sp-gmbh/helmut4-helm-chart/main/helmut4/Chart.yaml&query=%24.version&label=Chart&color=blue&logo=helm)](helmut4/Chart.yaml)
+[![AppVersion](https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/moovit-sp-gmbh/helmut4-helm-chart/main/helmut4/Chart.yaml&query=%24.appVersion&label=AppVersion&color=informational)](helmut4/Chart.yaml)
+[![Release](https://img.shields.io/github/v/release/moovit-sp-gmbh/helmut4-helm-chart?include_prereleases&label=release)](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/releases)
+[![Helm](https://img.shields.io/badge/Helm-3.0%2B-blue?logo=helm)](https://helm.sh/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.24%2B-blue?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
 [![CI](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/actions/workflows/ci.yml)
+[![Pages](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/actions/workflows/pages.yml/badge.svg?branch=main)](https://moovit-sp-gmbh.github.io/helmut4-helm-chart/)
 
 A complete Helm chart for the Helmut4 microservices application — MongoDB replica set, RabbitMQ with HTTP-backend auth wired to the Helmut user store, the full microservice fleet, an nginx Ingress with WebSTOMP, and an optional multi-volume storage layer that backs onto SMB / NFS / cloud CSI drivers.
 
