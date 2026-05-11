@@ -1,6 +1,10 @@
 # Helmut4 Helm Chart
 
-A complete Helm chart for the Helmut4 microservices application with Kubernetes integration.
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/moovit-sp-gmbh/helmut4-helm-chart?include_prereleases&sort=semver)](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/releases)
+[![CI](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/actions/workflows/ci.yml/badge.svg)](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/actions/workflows/ci.yml)
+
+A complete Helm chart for the Helmut4 microservices application — MongoDB replica set, RabbitMQ with HTTP-backend auth wired to the Helmut user store, the full microservice fleet, an nginx Ingress with WebSTOMP, and an optional multi-volume storage layer that backs onto SMB / NFS / cloud CSI drivers.
 
 ## Features
 
@@ -23,14 +27,36 @@ A complete Helm chart for the Helmut4 microservices application with Kubernetes 
 
 ## Installation
 
-### 1. Clone repository
+You can either pull the packaged chart from the GitHub Pages helm-repo, or clone
+the source tree and install from disk. Either way, all real credentials live in
+`install-values.yaml`, which is **never** committed.
+
+### Option A — install from the helm repo (preferred)
 
 ```bash
-git clone <repo-url>
+helm repo add helmut4 https://moovit-sp-gmbh.github.io/helmut4-helm-chart
+helm repo update
+
+# Grab a values template, edit it, then install:
+curl -fsSL -o install-values.yaml \
+  https://raw.githubusercontent.com/moovit-sp-gmbh/helmut4-helm-chart/main/examples/values-production.yaml
+$EDITOR install-values.yaml
+
+helm upgrade helmut4 helmut4/helmut4 --install \
+  -n helmut4 --create-namespace \
+  -f install-values.yaml
+```
+
+### Option B — install from a source checkout
+
+#### 1. Clone the repository
+
+```bash
+git clone https://github.com/moovit-sp-gmbh/helmut4-helm-chart.git
 cd helmut4-helm-chart
 ```
 
-### 2. Create `install-values.yaml`
+#### 2. Create `install-values.yaml`
 
 `install-values.yaml` is **gitignored** (it holds real credentials). Copy one of the
 examples as a starting point and edit it for your environment:
@@ -83,7 +109,7 @@ global:
         appMount: true
 ```
 
-### 3. Install the chart
+#### 3. Install the chart
 
 ```bash
 helm upgrade helmut4 --install \
@@ -93,11 +119,10 @@ helm upgrade helmut4 --install \
   ./helmut4
 ```
 
-Or use the preconfigured scripts:
+Or run the bundled wrapper, which does the same thing with a pre-flight check:
 
 ```bash
-./install.sh              # generic
-./install-moovit24.sh     # Rancher cluster (sets KUBECONFIG)
+./install.sh
 ```
 
 ## Configuration
