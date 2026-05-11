@@ -1,12 +1,16 @@
-# CSI Driver Konfiguration
+# CSI Driver Configuration
 
-## Überblick
+## Overview
 
-Der Helmut4 Chart unterstützt die Montage von externem Storage über CSI (Container Storage Interface) Driver. Dies ermöglicht es, verschiedene Storage-Systeme mit Kubernetes zu integrieren.
+The Helmut4 chart mounts external storage through CSI (Container Storage
+Interface) drivers, so any storage backend with a CSI implementation can
+back the application volumes — managed cloud disks, SMB / NFS file shares,
+Ceph, Longhorn, etc.
 
-## Supported CSI Driver
+## Supported CSI drivers
 
-### Azure Disk CSI Driver
+### Azure Disk CSI driver
+
 ```yaml
 global:
   storage:
@@ -14,12 +18,17 @@ global:
 ```
 
 Installation:
+
 ```bash
-helm repo add azuredisk-csi-driver https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/charts
-helm install azuredisk-csi-driver azuredisk-csi-driver/azuredisk-csi-driver --namespace kube-system
+helm repo add azuredisk-csi-driver \
+  https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/master/charts
+helm install azuredisk-csi-driver \
+  azuredisk-csi-driver/azuredisk-csi-driver \
+  --namespace kube-system
 ```
 
-### AWS EBS CSI Driver
+### AWS EBS CSI driver
+
 ```yaml
 global:
   storage:
@@ -27,159 +36,190 @@ global:
 ```
 
 Installation:
+
 ```bash
 helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
-helm install aws-ebs-csi-driver aws-ebs-csi-driver/aws-ebs-csi-driver --namespace kube-system
+helm install aws-ebs-csi-driver aws-ebs-csi-driver/aws-ebs-csi-driver \
+  --namespace kube-system
 ```
 
-### Google Cloud Persistent Disk CSI Driver
+### Google Cloud Persistent Disk CSI driver
+
 ```yaml
 global:
   storage:
     csiDriver: "pd.csi.storage.gke.io"
 ```
 
-## Storage Class Definition
+## StorageClass
 
-Der Chart erstellt automatisch eine StorageClass namens `helmut4-csi-storage`:
+The chart generates a StorageClass per declared volume. The class name is
+`<storageClassName>-<volume-name>`, so a volume named `helmut-storage`
+under `storageClassName: helmut4-csi-storage` yields:
 
 ```yaml
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: helmut4-csi-storage
+  name: helmut4-csi-storage-helmut-storage
 provisioner: <your-csi-driver>
 parameters:
-  type: pd-ssd
+  source: "//storage-server.example.com/helmut"   # SMB / NFS only
 allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer
 ```
 
-## Konfiguration im Chart
+## Chart configuration
+
+Storage is configured as a list under `global.storage.volumes` — one entry
+per PVC/StorageClass the chart should provision:
 
 ```yaml
 global:
   storage:
-    csiDriver: "disk.csi.azure.com"      # CSI Driver Name
-    volumePath: "/mnt/helmut"            # Mount Path in Container
-    volumeSize: "100Gi"                  # Größe des Volumes
+    csiDriver: "disk.csi.azure.com"            # CSI driver name
+    storageClassName: "helmut4-csi-storage"    # prefix; entry name is appended
+    volumes:
+      - name: helmut-storage
+        mountPath: "/Volumes/Helmut"
+        size: "100Gi"
+        source: ""                              # empty = dynamic provisioning
+        appMount: true                          # mount on every Spring service
+                                                # whose values set
+                                                # volumeMounts: true
+      - name: mongobackup
+        mountPath: "/Volumes/Backup"
+        size: "50Gi"
+        source: ""
+        appMount: false                         # PVC only — no app-side mount
 ```
+
+Set `appMount: false` for volumes that are dedicated to ancillary jobs
+(e.g. a backup share) so they don't accidentally get mounted on every
+microservice pod.
 
 ## Persistent Volume Claims
 
-Der Chart erstellt zwei PVCs:
+For the values above the chart provisions:
 
-### 1. Helmut Storage PVC
+### `helmut-storage-pvc`
+
 ```yaml
 metadata:
   name: helmut-storage-pvc
 spec:
   accessModes:
-    - ReadWriteMany              # Für mehrere Pods
-  storageClassName: helmut4-csi-storage
+    - ReadWriteMany              # shared across all Spring services
+  storageClassName: helmut4-csi-storage-helmut-storage
   resources:
     requests:
-      storage: 100Gi            # Konfigurierbar
+      storage: 100Gi
 ```
 
-Verwendet von Services:
-- fx
-- co
-- io
-- users
-- streams
-- license
+Mounted into every service whose chart value has `volumeMounts: true` —
+by default: `fx`, `co`, `io`, `users`, `streams`, `license`.
 
-### 2. MongoDB Backup PVC
+### `mongobackup-pvc` (optional)
+
 ```yaml
 metadata:
-  name: mongodb-backup-pvc
+  name: mongobackup-pvc
 spec:
   accessModes:
-    - ReadWriteOnce             # Nur ein Pod
-  storageClassName: longhorn  # or any block-storage class (managed-premium, gp3, etc.)
+    - ReadWriteMany
+  storageClassName: helmut4-csi-storage-mongobackup
   resources:
     requests:
       storage: 50Gi
 ```
 
+Defined separately so a future backup workload can mount it; the chart
+itself doesn't ship a CronJob, so the PVC is provisioned but unused until
+you add one (or run `scripts/backup.sh` manually).
+
 ## Troubleshooting
 
-### PVC bleibt Pending
+### PVC stuck `Pending`
+
 ```bash
-# PVC Status prüfen
+# Status
 kubectl get pvc -n helmut4
 
-# Details anschauen
+# Details
 kubectl describe pvc helmut-storage-pvc -n helmut4
 
-# CSI Driver Logs
+# CSI driver logs
 kubectl logs -n kube-system -l app=csi-driver
 ```
 
-### Pod kann Volume nicht mounten
-```bash
-# Pod Events prüfen
-kubectl describe pod -n helmut4 fx-0
+### Pod cannot mount the volume
 
-# StorageClass überprüfen
+```bash
+# Pod events
+kubectl describe pod -n helmut4 <pod>
+
+# StorageClass
 kubectl get storageclass
 
-# Available PVs checken
+# Available PVs
 kubectl get pv
 ```
 
-### Volume Expansion
+### Resize a volume
 
 ```bash
-# PVC vergrößern (wenn supportiert)
+# Expand the PVC (only when the CSI driver supports it)
 kubectl patch pvc helmut-storage-pvc -n helmut4 -p \
   '{"spec":{"resources":{"requests":{"storage":"200Gi"}}}}'
 ```
 
-## Performance Optimization
+## Performance tuning
 
-### Parameter pro CSI Driver
+### Driver-specific parameters
 
 #### Azure
+
 ```yaml
 kind: StorageClass
 parameters:
-  skuName: Premium_LRS          # Premium Performance
+  skuName: Premium_LRS          # premium disk
   location: westeurope
   cachingMode: ReadWrite
 ```
 
 #### AWS
+
 ```yaml
 kind: StorageClass
 parameters:
-  type: gp3                      # GP3 für bessere Performance
+  type: gp3                      # gp3 — better $/IOPS than gp2
   iops: "3000"
   throughput: "125"
 ```
 
 #### Google Cloud
+
 ```yaml
 kind: StorageClass
 parameters:
-  type: pd-ssd                   # SSD für Performance
-  replication-type: regional-pd  # Regional für HA
+  type: pd-ssd                   # SSD-backed
+  replication-type: regional-pd  # regional disk for HA
 ```
 
-## Migration von bestehender Volumes
+## Migrating data from an existing volume
 
-1. Alte Volumes sichern:
-```bash
-kubectl cp helmut4/fx-pod:/Users/Shared/Helmut24 ./local-backup
-```
+1. Snapshot the source data:
 
-2. Neue Volume mit Daten initialisieren
-3. Pod neu starten (wird automatisch gemountet)
+   ```bash
+   kubectl cp helmut4/fx-pod:/Volumes/Helmut ./local-backup
+   ```
 
-## Weitere Ressourcen
+2. Initialise the new volume with the snapshot.
+3. Restart the pods — the new PVC gets mounted on next start.
 
-- [Kubernetes CSI Documentation](https://kubernetes-csi.github.io/)
-- [CSI Spec](https://github.com/container-storage-interface/spec)
-- [Azure Disk CSI Driver](https://github.com/kubernetes-sigs/azuredisk-csi-driver)
-- [AWS EBS CSI Driver](https://github.com/kubernetes-sigs/aws-ebs-csi-driver)
+## Further reading
+
+- [Kubernetes CSI documentation](https://kubernetes-csi.github.io/)
+- [CSI spec](https://github.com/container-storage-interface/spec)
+- [Azure Disk CSI driver](https://github.com/kubernetes-sigs/azuredisk-csi-driver)
+- [AWS EBS CSI driver](https://github.com/kubernetes-sigs/aws-ebs-csi-driver)
