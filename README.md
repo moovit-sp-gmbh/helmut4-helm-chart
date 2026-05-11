@@ -4,11 +4,11 @@ A complete Helm chart for the Helmut4 microservices application with Kubernetes 
 
 ## Features
 
-- **Nginx-based Ingress**: Path-based routing for all services including WebStomp
-- **MongoDB Replica Set**: 3 replicas with automatic RS (`rs0`) via `cloudpirates/mongodb v0.10.3`
-- **RabbitMQ StatefulSet**: 3 replicas for message queuing with persistent storage
+- **Nginx-based Ingress**: Path-based routing for all services, including STOMP-over-WebSocket on `/ws`
+- **MongoDB Replica Set**: 3-node RS (`rs0`) via `cloudpirates/mongodb v0.10.3`, with all seeds wired into the Spring driver
+- **RabbitMQ**: single-node deployment by default (see [helmut4/values.yaml](helmut4/values.yaml) for the four pieces an HA cluster needs)
 - **Longhorn Block Storage**: MongoDB PVCs on Longhorn (50 Gi per replica)
-- **SMB CSI Driver Support**: For application file storage (`/Volumes/Helmut`)
+- **SMB / NFS CSI Driver Support**: multi-volume list for application file storage and any additional shares (e.g. backups)
 - **Private Registry Credentials**: Docker Registry authentication integrated
 - **Fully Configurable**: All aspects manageable via `values.yaml`
 
@@ -30,9 +30,17 @@ git clone <repo-url>
 cd helmut4-helm-chart
 ```
 
-### 2. Configure `install-values.yaml`
+### 2. Create `install-values.yaml`
 
-All configuration belongs in `install-values.yaml` — no `--set` flags needed:
+`install-values.yaml` is **gitignored** (it holds real credentials). Copy one of the
+examples as a starting point and edit it for your environment:
+
+```bash
+cp examples/values-production.yaml install-values.yaml
+$EDITOR install-values.yaml
+```
+
+The file collects everything in one place — no `--set` flags needed:
 
 ```yaml
 appIngress:
@@ -67,9 +75,12 @@ global:
   storage:
     csiDriver: "smb.csi.k8s.io"
     storageClassName: "helmut4-csi-storage"
-    volume:
-      size: "100Gi"
-      source: "//server/share"
+    volumes:
+      - name: helmut-storage
+        mountPath: "/Volumes/Helmut"
+        size: "100Gi"
+        source: "//server/share"
+        appMount: true
 ```
 
 ### 3. Install the chart
@@ -147,18 +158,27 @@ kubectl create secret tls helmut4-tls \
 
 ### Storage (SMB for application volumes)
 
+`global.storage.volumes` is a list — each entry gets its own StorageClass and PVC.
+Set `appMount: true` to mount the volume into every service that has
+`volumeMounts: true`; set `appMount: false` for volumes used only by ancillary
+workloads (e.g. a backup share).
+
 ```yaml
 global:
   storage:
     csiDriver: "smb.csi.k8s.io"
     storageClassName: "helmut4-csi-storage"
-    mountPath: "/Volumes/Helmut"
-    volume:
-      size: "100Gi"
-      source: "//server/share"
-    mongobackup:
-      size: "50Gi"
-      source: "//server/share/backups"
+    volumes:
+      - name: helmut-storage
+        mountPath: "/Volumes/Helmut"
+        size: "100Gi"
+        source: "//server/share"
+        appMount: true
+      - name: mongobackup
+        mountPath: "/Volumes/Backup"
+        size: "50Gi"
+        source: "//server/share/backups"
+        appMount: false
 
 credentials:
   storage:
@@ -168,7 +188,8 @@ credentials:
       domain: ""
 ```
 
-Services with volume mount: `fx`, `co`, `io`, `users`, `streams`, `license`, `xmlgenerator`
+Services with `volumeMounts: true` (auto-mount every `appMount: true` volume):
+`fx`, `co`, `io`, `users`, `streams`, `license`.
 
 ### Service Replicas and Resources
 
@@ -262,10 +283,12 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more details.
 
 ## Security
 
-- Always put credentials in `install-values.yaml` (never commit to git)
-- Set MongoDB and RabbitMQ passwords before first deployment
-- Configure TLS/SSL via cert-manager or a custom certificate
-- RBAC is enabled by default (namespace-scoped Role/RoleBinding)
+- `install-values.yaml` is gitignored — keep all real credentials there. Use the
+  files in `examples/` as templates (they contain `CHANGE_ME` placeholders).
+- Set MongoDB and RabbitMQ passwords (and the MongoDB replica-set keyfile)
+  before first deployment.
+- Configure TLS/SSL via cert-manager or a custom certificate.
+- RBAC is enabled by default (namespace-scoped Role/RoleBinding).
 
 See [docs/SECURITY.md](docs/SECURITY.md) for more details.
 
