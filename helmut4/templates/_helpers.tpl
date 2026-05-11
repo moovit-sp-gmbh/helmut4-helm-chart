@@ -60,13 +60,33 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
-MongoDB headless host (FQDN)
+MongoDB connection URI. In replica-set mode a full mongodb:// URI with all three
+member seeds is returned so the Java driver discovers the primary automatically.
+In standalone mode only the single host URI is returned.
 */}}
 {{- define "helmut4.mongodb.host" -}}
+{{- $name := .Values.mongodb.fullnameOverride | default "mongodb" }}
+{{- $ns   := .Values.namespace }}
 {{- if .Values.mongodb.replicaSet.enabled }}
-{{- printf "%s-headless.%s.svc.cluster.local" (.Values.mongodb.fullnameOverride | default "mongodb") .Values.namespace }}
+{{- printf "%s-0.%s-headless.%s.svc.cluster.local" $name $name $ns }}
 {{- else }}
-{{- printf "%s.%s.svc.cluster.local" (.Values.mongodb.fullnameOverride | default "mongodb") .Values.namespace }}
+{{- printf "%s.%s.svc.cluster.local" $name $ns }}
+{{- end }}
+{{- end }}
+
+{{/*
+Full MongoDB connection URI used for SPRING_DATA_MONGODB_URI.
+In replica-set mode all three seeds plus replicaSet= and authSource= are included
+so the Java driver enters REPLICA_SET topology mode and finds the primary.
+*/}}
+{{- define "helmut4.mongodb.uri" -}}
+{{- $name := .Values.mongodb.fullnameOverride | default "mongodb" }}
+{{- $ns   := .Values.namespace }}
+{{- $db   := .Values.mongodb.database | default "helmut4" }}
+{{- if .Values.mongodb.replicaSet.enabled }}
+{{- printf "mongodb://%s-0.%s-headless.%s.svc.cluster.local:27017,%s-1.%s-headless.%s.svc.cluster.local:27017,%s-2.%s-headless.%s.svc.cluster.local:27017/%s?replicaSet=%s&authSource=admin" $name $name $ns $name $name $ns $name $name $ns $db .Values.mongodb.replicaSet.name }}
+{{- else }}
+{{- printf "mongodb://%s.%s.svc.cluster.local:27017/%s?authSource=admin" $name $ns $db }}
 {{- end }}
 {{- end }}
 
