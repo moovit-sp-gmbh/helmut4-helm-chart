@@ -8,10 +8,12 @@ global:
   storage:
     csiDriver: "smb.csi.k8s.io"
     storageClassName: "helmut4-csi-storage"
-    mountPath: "/Volumes/Helmut"
-    volume:
-      size: "50Gi"
-      source: "//storage-server.local/helmut-dev"
+    volumes:
+      - name: helmut-storage
+        mountPath: "/Volumes/Helmut"
+        size: "50Gi"
+        source: "//storage-server.local/helmut-dev"
+        appMount: true
 
 rbac:
   create: true

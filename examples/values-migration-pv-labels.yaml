@@ -18,13 +18,17 @@ global:
   storage:
     csiDriver: "smb.csi.k8s.io"  # or nfs.csi.k8s.io etc.
     storageClassName: "helmut4-csi-storage"
-    mountPath: "/Volumes/Helmut"
-    volume:
-      size: "100Gi"
-      source: "//storage-server.example.com/helmut-volumes"
-    mongobackup:
-      size: "50Gi"
-      source: "//backup-server.example.com/mongodb-backups"
+    volumes:
+      - name: helmut-storage
+        mountPath: "/Volumes/Helmut"
+        size: "100Gi"
+        source: "//storage-server.example.com/helmut-volumes"
+        appMount: true
+      - name: mongobackup
+        mountPath: "/Volumes/Backup"
+        size: "50Gi"
+        source: "//backup-server.example.com/mongodb-backups"
+        appMount: false
 
 rbac:
   create: true
