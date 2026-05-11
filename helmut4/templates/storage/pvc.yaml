@@ -1,22 +1,24 @@
 {{- if .Values.global.storage }}
+{{- if .Values.global.storage.volumes }}
+{{- range .Values.global.storage.volumes }}
 ---
-# Storage Class for CSI Driver
+# StorageClass for volume: {{ .name }}
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: {{ .Values.global.storage.storageClassName }}
-provisioner: {{ .Values.global.storage.csiDriver }}
-{{- if .Values.global.storage.volume.source }}
+  name: {{ $.Values.global.storage.storageClassName }}-{{ .name }}
+provisioner: {{ $.Values.global.storage.csiDriver }}
+{{- if .source }}
 parameters:
   # SMB/NFS mount parameters
-  source: {{ .Values.global.storage.volume.source | quote }}
-  {{- if and (contains "smb" .Values.global.storage.csiDriver) .Values.credentials.storage.smb.username }}
+  source: {{ .source | quote }}
+  {{- if and (contains "smb" $.Values.global.storage.csiDriver) $.Values.credentials.storage.smb.username }}
   # Reference SMB credentials secret
-  csi.storage.k8s.io/node-stage-secret-name: {{ include "helmut4.fullname" . }}-smb-credentials
-  csi.storage.k8s.io/node-stage-secret-namespace: {{ .Values.namespace }}
+  csi.storage.k8s.io/node-stage-secret-name: {{ include "helmut4.fullname" $ }}-smb-credentials
+  csi.storage.k8s.io/node-stage-secret-namespace: {{ $.Values.namespace }}
   {{- end }}
 {{- end }}
-{{- if contains "smb" .Values.global.storage.csiDriver }}
+{{- if contains "smb" $.Values.global.storage.csiDriver }}
 mountOptions:
   - dir_mode=0777
   - file_mode=0777
@@ -28,20 +30,22 @@ allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer
 
 ---
-# PersistentVolumeClaim for Helmut shared storage
+# PersistentVolumeClaim for {{ .name }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: helmut-storage-pvc
-  namespace: {{ .Values.namespace }}
+  name: {{ .name }}-pvc
+  namespace: {{ $.Values.namespace }}
   labels:
-    {{- include "helmut4.labels" . | nindent 4 }}
+    {{- include "helmut4.labels" $ | nindent 4 }}
     component: storage
 spec:
   accessModes:
     - ReadWriteMany
-  storageClassName: {{ .Values.global.storage.storageClassName }}
+  storageClassName: {{ $.Values.global.storage.storageClassName }}-{{ .name }}
   resources:
     requests:
-      storage: {{ .Values.global.storage.volume.size }}
+      storage: {{ .size }}
+{{- end }}
+{{- end }}
 {{- end }}

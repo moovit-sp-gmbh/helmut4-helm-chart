@@ -88,15 +88,23 @@ global:
     # `/Volumes/Helmut` mount.
     storageClassName: "helmut4-csi-storage"
 
-    # -- Path inside the containers where the shared storage is mounted.
-    mountPath: "/Volumes/Helmut"
-
-    volume:
-      # -- Size requested for the main `/Volumes` PVC.
-      size: "100Gi"
-      # -- Backend share to mount. Use `//server/share` for SMB and
-      # `server:/path` for NFS. Leave empty to use dynamic provisioning.
-      source: ""
+    # -- List of PersistentVolumeClaims to create. Each entry gets its own
+    # StorageClass and PVC. Services with `volumeMounts: true` receive all
+    # volumes mounted at their respective `mountPath`.
+    volumes:
+      - # -- Name used for the PVC (`<name>-pvc`) and the StorageClass
+        # (`<storageClassName>-<name>`).
+        name: helmut-storage
+        # -- Path inside the containers where this volume is mounted.
+        mountPath: "/Volumes/Helmut"
+        # -- Size requested for this PVC.
+        size: "100Gi"
+        # -- Backend share to mount. Use `//server/share` for SMB and
+        # `server:/path` for NFS. Leave empty to use dynamic provisioning.
+        source: ""
+        # -- Mount this volume on all services that have `volumeMounts: true`.
+        # Set to `false` for volumes only used by specific jobs (e.g. backup).
+        appMount: true
 
 # -- Kubernetes namespace that owns every resource this chart creates.
 namespace: helmut4

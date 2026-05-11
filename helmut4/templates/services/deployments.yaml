@@ -101,14 +101,22 @@ spec:
           
           {{- if $service.volumeMounts }}
           volumeMounts:
-            - name: helmut-storage
-              mountPath: {{ $.Values.global.storage.mountPath }}
+            {{- range $.Values.global.storage.volumes }}
+            {{- if .appMount }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+            {{- end }}
+            {{- end }}
           {{- end }}
       
       {{- if $service.volumeMounts }}
       volumes:
-        - name: helmut-storage
+        {{- range $.Values.global.storage.volumes }}
+        {{- if .appMount }}
+        - name: {{ .name }}
           persistentVolumeClaim:
-            claimName: helmut-storage-pvc
+            claimName: {{ .name }}-pvc
+        {{- end }}
+        {{- end }}
       {{- end }}
 {{- end }}
