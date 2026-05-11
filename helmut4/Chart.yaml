@@ -3,18 +3,18 @@ name: helmut4
 description: A Helm chart for Helmut4 microservices application
 type: application
 version: 1.0.0
-appVersion: "4.9.1"
+appVersion: "4.12"
 keywords:
   - helmut4
   - microservices
   - mongodb
   - rabbitmq
-home: https://github.com/yourusername/helmut4-helm-chart
+home: https://github.com/moovit24/helmut4-helm-chart
 sources:
-  - https://github.com/yourusername/helmut4-helm-chart
+  - https://github.com/moovit24/helmut4-helm-chart
 maintainers:
-  - name: Your Name
-    email: your.email@example.com
+  - name: Rafael Hutter
+    email: r.hutter@moovit.de
 dependencies:
   - name: mongodb
     version: "0.10.3"

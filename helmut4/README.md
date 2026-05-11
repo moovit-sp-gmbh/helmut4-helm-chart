@@ -1,20 +1,20 @@
 # helmut4
 
-![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 4.9.1](https://img.shields.io/badge/AppVersion-4.9.1-informational?style=flat-square)
+![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 4.12](https://img.shields.io/badge/AppVersion-4.12-informational?style=flat-square)
 
 A Helm chart for Helmut4 microservices application
 
-**Homepage:** <https://github.com/yourusername/helmut4-helm-chart>
+**Homepage:** <https://github.com/moovit24/helmut4-helm-chart>
 
 ## Maintainers
 
 | Name | Email | Url |
 | ---- | ------ | --- |
-| Your Name | <your.email@example.com> |  |
+| Rafael Hutter | <r.hutter@moovit.de> |  |
 
 ## Source Code
 
-* <https://github.com/yourusername/helmut4-helm-chart>
+* <https://github.com/moovit24/helmut4-helm-chart>
 
 ## Requirements
 
