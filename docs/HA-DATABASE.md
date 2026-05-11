@@ -8,7 +8,7 @@
 - **3 replicas** with replica set `rs0`
 - **Longhorn block storage**: 3x 50 Gi PVCs (clean slate on reinstall)
 - Spring Boot connects via `mongodb-headless` (RS-aware topology)
-- Health-check scripts and mongobackup use the ClusterIP service `mongodb`
+- Health-check scripts use the ClusterIP service `mongodb` (the headless service round-robins, the ClusterIP gives a stable address)
 
 ### DNS Names
 
@@ -106,27 +106,40 @@ kubectl port-forward -n helmut4 rabbitmq-0 15672:15672
 
 ## Backup and Restore
 
-### MongoDB Backup (automatic via CronJob)
+The chart does not ship a managed backup workload. The bundled
+`scripts/backup.sh` wrapper runs `mongodump` inside `mongodb-0` and
+`kubectl cp`s the result to local disk; schedule it from cron / a CI
+runner / a node-level systemd timer to suit your retention policy.
 
-The `mongobackup` pod runs automatic backups to the SMB share.
+### MongoDB Backup (ad-hoc)
 
 ```bash
-# Manual backup
-kubectl exec -n helmut4 -it mongobackup-<hash> -- mongodump \
+./scripts/backup.sh helmut4 ./backups
+```
+
+Or inline:
+
+```bash
+kubectl exec -n helmut4 mongodb-0 -- mongodump \
   -u root -p <password> \
-  --host mongodb.helmut4.svc.cluster.local \
-  --out /backup/manual-$(date +%Y%m%d)
+  --authenticationDatabase admin \
+  --out /tmp/mongodb-backup-$(date +%Y%m%d)
+kubectl cp helmut4/mongodb-0:/tmp/mongodb-backup-$(date +%Y%m%d) ./backups/
 ```
 
 ### MongoDB Restore
 
 ```bash
-kubectl exec -n helmut4 -it mongobackup-<hash> -- mongorestore \
+kubectl cp ./backups/<backup-date> helmut4/mongodb-0:/tmp/restore
+kubectl exec -n helmut4 mongodb-0 -- mongorestore \
   -u root -p <password> \
-  --host mongodb.helmut4.svc.cluster.local \
   --authenticationDatabase admin \
-  /backup/<backup-date>/
+  /tmp/restore
 ```
+
+> The `mongobackup` volume (when configured with `appMount: false`)
+> exists so a backup CronJob or sidecar can write to it; the chart
+> itself currently provisions only the PVC.
 
 ### RabbitMQ Definitions Export
 

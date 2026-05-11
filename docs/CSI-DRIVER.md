@@ -89,7 +89,6 @@ Verwendet von Services:
 - users
 - streams
 - license
-- xmlgenerator
 
 ### 2. MongoDB Backup PVC
 ```yaml

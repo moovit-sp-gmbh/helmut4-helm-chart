@@ -20,7 +20,7 @@
 - 3 replicas with automatic replica set (`rs0`) for HA
 - **Longhorn block storage**: 3x 50 Gi PVCs (clean slate on reinstall)
 - Headless service `mongodb-headless` for RS topology (Spring Boot connection)
-- Additional ClusterIP service `mongodb` via `extraObjects` (for health-check scripts and mongobackup)
+- Additional ClusterIP service `mongodb` via `extraObjects` so health-check scripts have a stable address (the headless service round-robins across all RS members)
 - Auth via `rootUsername` / `rootPassword`
 - Spring Boot connects via `envFrom` (ConfigMap `service-config` + secret `mongodb-credentials`)
 
@@ -59,10 +59,10 @@
 
 ### 7. All Microservices
 
-- 16 services with individual deployments:
+- 15 services with individual deployments:
   - `hp`, `hw`, `fx`, `co`, `io`, `hk`, `users`, `streams`
   - `preferences`, `metadata`, `logging`, `amqp`, `license`, `language`
-  - `cronjob`, `xmlgenerator`
+  - `cronjob`
 - Dynamic service-to-service URLs via ConfigMap
 - Health checks for all services
 - Services with volume mount support
@@ -138,7 +138,7 @@ helmut4-helm-chart/
 
 1. **MongoDB RS mode**: `cloudpirates/mongodb` in RS mode only creates `mongodb-headless`.
    An additional ClusterIP service `mongodb` is created via `extraObjects` so that
-   health-check scripts and mongobackup have a stable address.
+   health-check scripts and ad-hoc backup commands have a stable address.
 
 2. **Spring Boot config**: All environment variables follow Spring Boot relaxed binding
    (`SPRING_DATA_MONGODB_HOST` → `spring.data.mongodb.host`).
