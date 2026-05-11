@@ -31,7 +31,9 @@ metadata:
     {{- include "helmut4.labels" $root | nindent 4 }}
     app: {{ $service.name }}
 spec:
+  {{- if not $root.Values.autoscaling.enabled }}
   replicas: {{ $service.replicas | default $root.Values.serviceReplicas }}
+  {{- end }}
   selector:
     matchLabels:
       app: {{ $service.name }}

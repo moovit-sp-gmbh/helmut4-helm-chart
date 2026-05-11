@@ -400,8 +400,55 @@ rabbitmq:
       web_stomp.tcp.port = 15674
 
 # -- Default replica count for any microservice that does not set its own
-# `services.<name>.replicas`.
+# `services.<name>.replicas`. Ignored when `autoscaling.enabled` is true.
 serviceReplicas: 2
+
+# -- PodDisruptionBudget for every microservice whose effective replica
+# count is >= 2. Default disabled so first-time installs on small clusters
+# don't block node drains; flip on once the cluster has the headroom for
+# every Deployment to keep `minAvailable` pods up during voluntary
+# evictions.
+podDisruptionBudget:
+  # -- Render the PDBs.
+  enabled: false
+  # -- Minimum pods that must stay up during voluntary disruptions.
+  # Integers are absolute; strings ending in `%` are percentages.
+  minAvailable: 1
+
+# -- HorizontalPodAutoscaler for every microservice. Requires
+# `metrics-server` in the cluster. When enabled the static
+# `services.<name>.replicas` / `serviceReplicas` is dropped from the
+# Deployment so the HPA fully owns the replica count.
+autoscaling:
+  # -- Render the HPAs.
+  enabled: false
+  # -- Lower bound for every service.
+  minReplicas: 1
+  # -- Upper bound for every service.
+  maxReplicas: 10
+  # -- Target average CPU utilization (%) that triggers scaling.
+  targetCPUUtilizationPercentage: 80
+  # -- Optional target memory utilization (%). Leave null to skip the
+  # memory metric. Memory-based scaling rarely scales down on Spring
+  # Boot apps (JVM holds the heap), so enable with care.
+  targetMemoryUtilizationPercentage: null
+
+# -- Prometheus Operator ServiceMonitor for every microservice. Requires
+# the prometheus-operator CRDs (`monitoring.coreos.com/v1`) in the
+# cluster. The services expose Spring Boot Actuator on the same port as
+# the application traffic.
+serviceMonitor:
+  # -- Render the ServiceMonitors.
+  enabled: false
+  # -- Scrape interval.
+  interval: "30s"
+  # -- Per-target scrape timeout.
+  scrapeTimeout: "10s"
+  # -- Actuator endpoint that exposes Prometheus metrics.
+  path: "/actuator/prometheus"
+  # -- Extra labels to attach (e.g. `release: prometheus` so the
+  # prometheus-operator picks the SM up).
+  labels: {}
 
 # -- (object) Per-microservice deployment settings. Each key is a service
 # identifier (`hp`, `hw`, `fx`, ...) and shares the same shape:

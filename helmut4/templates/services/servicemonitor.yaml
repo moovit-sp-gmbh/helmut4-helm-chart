@@ -1,0 +1,31 @@
+{{- if .Values.serviceMonitor.enabled }}
+{{- $root := . }}
+{{- range $name, $service := .Values.services }}
+{{- if $service.port }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $service.name }}
+  namespace: {{ $root.Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" $root | nindent 4 }}
+    app: {{ $service.name }}
+    {{- with $root.Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ $service.name }}
+  namespaceSelector:
+    matchNames:
+      - {{ $root.Values.namespace }}
+  endpoints:
+    - port: http
+      path: {{ $root.Values.serviceMonitor.path | quote }}
+      interval: {{ $root.Values.serviceMonitor.interval | quote }}
+      scrapeTimeout: {{ $root.Values.serviceMonitor.scrapeTimeout | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
