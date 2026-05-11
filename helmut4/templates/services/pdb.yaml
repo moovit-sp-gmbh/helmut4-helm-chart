@@ -1,0 +1,22 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- $root := . }}
+{{- range $name, $service := .Values.services }}
+{{- $replicas := $service.replicas | default $root.Values.serviceReplicas | int }}
+{{- if ge $replicas 2 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $service.name }}
+  namespace: {{ $root.Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" $root | nindent 4 }}
+    app: {{ $service.name }}
+spec:
+  minAvailable: {{ $root.Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app: {{ $service.name }}
+{{- end }}
+{{- end }}
+{{- end }}
