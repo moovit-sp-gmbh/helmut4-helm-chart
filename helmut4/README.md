@@ -4,7 +4,7 @@
 
 A Helm chart for Helmut4 microservices application
 
-**Homepage:** <https://github.com/moovit24/helmut4-helm-chart>
+**Homepage:** <https://github.com/moovit-sp-gmbh/helmut4-helm-chart>
 
 ## Maintainers
 
@@ -14,7 +14,7 @@ A Helm chart for Helmut4 microservices application
 
 ## Source Code
 
-* <https://github.com/moovit24/helmut4-helm-chart>
+* <https://github.com/moovit-sp-gmbh/helmut4-helm-chart>
 
 ## Requirements
 

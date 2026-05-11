@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://moovit24.de/helmut4/values.schema.json",
+  "$id": "https://moovit-sp-gmbh.github.io/helmut4-helm-chart/values.schema.json",
   "title": "Helmut4 chart values",
   "description": "Validation schema for the Helmut4 Helm chart. Parent-chart values are strictly typed; subchart blocks (mongodb, rabbitmq) are intentionally permissive because their subcharts ship their own schemas.",
   "type": "object",

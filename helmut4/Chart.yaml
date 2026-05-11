@@ -10,9 +10,9 @@ keywords:
   - microservices
   - mongodb
   - rabbitmq
-home: https://github.com/moovit24/helmut4-helm-chart
+home: https://github.com/moovit-sp-gmbh/helmut4-helm-chart
 sources:
-  - https://github.com/moovit24/helmut4-helm-chart
+  - https://github.com/moovit-sp-gmbh/helmut4-helm-chart
 maintainers:
   - name: Rafael Hutter
     email: r.hutter@moovit.de
