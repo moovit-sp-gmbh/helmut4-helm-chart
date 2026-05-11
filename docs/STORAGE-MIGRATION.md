@@ -110,15 +110,18 @@ global:
   storage:
     csiDriver: "nfs.csi.k8s.io"         # NFS CSI Driver
     storageClassName: "nfs-helmut"
-    
-    volume:
-      size: "100Gi"
-      # NFS-Share im Format: server:/path
-      source: "nfs-server.example.com:/exports/helmut-volumes"
-    
-    mongobackup:
-      size: "50Gi"
-      source: "nfs-server.example.com:/exports/mongodb-backups"
+    volumes:
+      - name: helmut-storage
+        mountPath: "/Volumes/Helmut"
+        size: "100Gi"
+        # NFS-Share im Format: server:/path
+        source: "nfs-server.example.com:/exports/helmut-volumes"
+        appMount: true
+      - name: mongobackup
+        mountPath: "/Volumes/Backup"
+        size: "50Gi"
+        source: "nfs-server.example.com:/exports/mongodb-backups"
+        appMount: false
 ```
 
 ### Schritt 3: Installieren
@@ -141,14 +144,17 @@ global:
   storage:
     csiDriver: "pd.csi.storage.gke.io"   # GKE, Azure, AWS CSI driver
     storageClassName: "helmut4-csi-storage"
-    
-    volume:
-      size: "100Gi"
-      source: ""                          # Leer = dynamisch provisioned
-    
-    mongobackup:
-      size: "50Gi"
-      source: ""                          # Leer = dynamisch provisioned
+    volumes:
+      - name: helmut-storage
+        mountPath: "/Volumes/Helmut"
+        size: "100Gi"
+        source: ""                        # Leer = dynamisch provisioned
+        appMount: true
+      - name: mongobackup
+        mountPath: "/Volumes/Backup"
+        size: "50Gi"
+        source: ""                        # Leer = dynamisch provisioned
+        appMount: false
 ```
 
 ---

@@ -50,13 +50,17 @@ global:
   storage:
     csiDriver: "smb.csi.k8s.io"
     storageClassName: "helmut4-csi-storage"
-    mountPath: "/Volumes/Helmut"
-    volume:
-      size: "100Gi"
-      source: "//your-server/share"
-    mongobackup:
-      size: "50Gi"
-      source: "//your-server/share/backups"
+    volumes:
+      - name: helmut-storage
+        mountPath: "/Volumes/Helmut"
+        size: "100Gi"
+        source: "//your-server/share"
+        appMount: true
+      - name: mongobackup
+        mountPath: "/Volumes/Backup"
+        size: "50Gi"
+        source: "//your-server/share/backups"
+        appMount: false
 
 appIngress:
   enabled: true
