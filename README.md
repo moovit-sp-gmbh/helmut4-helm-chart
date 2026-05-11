@@ -249,7 +249,7 @@ services:
 | `/v1/members`, `/v1/ws` | users | 8000 |
 | `/v1/streams`, `/streamdesigner` | streams | 8001 |
 | `/v1/preferences` | preferences | 8002 |
-| `/v1/metadata` | metadata | 8003 |
+| `/v1/metadata`, `/v1/metadataSet` | metadata | 8003 |
 | `/v1/logging` | logging | 8004 |
 | `/v1/amqp` | amqp | 8005 |
 | `/v1/license`, `/v1/client` | license | 8006 |
