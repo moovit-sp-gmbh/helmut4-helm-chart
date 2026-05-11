@@ -5,10 +5,12 @@ global:
   storage:
     csiDriver: "disk.csi.azure.com"
     storageClassName: "helmut4-csi-storage"
-    mountPath: "/Volumes/Helmut"
-    volume:
-      size: "100Gi"
-      source: "" # Not used with Azure Disk – dynamic provisioning
+    volumes:
+      - name: helmut-storage
+        mountPath: "/Volumes/Helmut"
+        size: "100Gi"
+        source: "" # Not used with Azure Disk – dynamic provisioning
+        appMount: true
 
 # MongoDB on a dedicated block-storage class (Azure Premium SSD recommended)
 mongodb:

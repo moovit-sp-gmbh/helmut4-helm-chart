@@ -11,13 +11,17 @@ global:
   storage:
     csiDriver: "smb.csi.k8s.io" # adjust: ebs.csi.aws.com / disk.csi.azure.com etc.
     storageClassName: "helmut4-csi-storage"
-    mountPath: "/Volumes/Helmut"
-    volume:
-      size: "500Gi"
-      source: "//storage-server.example.com/helmut"
-    mongobackup:
-      size: "100Gi"
-      source: "//backup-server.example.com/helmut-backups"
+    volumes:
+      - name: helmut-storage
+        mountPath: "/Volumes/Helmut"
+        size: "500Gi"
+        source: "//storage-server.example.com/helmut"
+        appMount: true
+      - name: mongobackup
+        mountPath: "/Volumes/Backup"
+        size: "100Gi"
+        source: "//backup-server.example.com/helmut-backups"
+        appMount: false
 
 credentials:
   storage:

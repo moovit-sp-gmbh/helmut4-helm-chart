@@ -5,10 +5,12 @@ global:
   storage:
     csiDriver: "ebs.csi.aws.com"
     storageClassName: "helmut4-csi-storage"
-    mountPath: "/Volumes/Helmut"
-    volume:
-      size: "100Gi"
-      source: "" # Not used with EBS – dynamic provisioning
+    volumes:
+      - name: helmut-storage
+        mountPath: "/Volumes/Helmut"
+        size: "100Gi"
+        source: "" # Not used with EBS – dynamic provisioning
+        appMount: true
 
 # MongoDB on a dedicated block-storage class (EBS gp3 recommended)
 mongodb:
