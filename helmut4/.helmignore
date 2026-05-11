@@ -1,0 +1,15 @@
+# Patterns to ignore when building the chart package.
+.DS_Store
+.git/
+.gitignore
+.idea/
+.vscode/
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+# Local test artifacts
+ci/
+tests/
+OWNERS
