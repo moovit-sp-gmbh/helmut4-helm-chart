@@ -122,6 +122,10 @@ spec:
     solvers:
     - http01:
         ingress:
+          # Match your Ingress controller's class. Common values: nginx,
+          # traefik, haproxy. If you're on Gateway API instead, replace
+          # the `solvers` block with a `gatewayHTTPRoute` solver — see
+          # https://cert-manager.io/docs/configuration/acme/http01/#configuring-the-http01-gateway-api-solver
           class: nginx
 EOF
 

@@ -6,6 +6,7 @@ Make sure the following tools are installed and configured:
 
 - `kubectl` (configured for your cluster)
 - `helm` 3+
+- An Ingress controller **or** a Gateway API implementation installed (see [../README.md#ingress-controllers](../README.md#ingress-controllers))
 - Longhorn installed in the cluster (for MongoDB)
 - SMB CSI Driver installed in the cluster (for application storage)
 
@@ -118,10 +119,14 @@ kubectl exec -n helmut4 -it rabbitmq-0 -- rabbitmq-diagnostics ping
 kubectl exec -n helmut4 -it rabbitmq-0 -- rabbitmqctl cluster_status
 ```
 
-### Ingress
+### Ingress / HTTPRoute
 
 ```bash
+# Ingress mode (default — appIngress.api: "ingress")
 kubectl get ingress -n helmut4
+
+# Gateway API mode (appIngress.api: "gateway")
+kubectl get httproute -n helmut4
 ```
 
 ## 6. View logs
@@ -185,15 +190,26 @@ kubectl exec -n helmut4 -it mongodb-0 -- mongosh \
   --eval "rs.initiate({_id:'rs0',members:[{_id:0,host:'mongodb-0.mongodb-headless:27017'},{_id:1,host:'mongodb-1.mongodb-headless:27017'},{_id:2,host:'mongodb-2.mongodb-headless:27017'}]})"
 ```
 
-### Ingress not working
+### Ingress / HTTPRoute not working
 
 ```bash
-# Nginx Ingress Controller installed?
+# Is your Ingress controller / Gateway running?
+# ingress-nginx:
 kubectl get pods -n ingress-nginx
+# Traefik:
+kubectl get pods -n traefik
+# Envoy Gateway:
+kubectl get pods -n envoy-gateway-system
+# Generic — find your IngressClass / GatewayClass:
+kubectl get ingressclass
+kubectl get gatewayclass
 
-# TLS certificate present?
+# TLS certificate present? (Ingress mode — cert-manager + Let's Encrypt)
 kubectl get certificate -n helmut4
 kubectl describe certificate helmut4-tls -n helmut4
+
+# Gateway API mode — the Gateway itself owns TLS; check it in the
+# namespace your platform team manages, not helmut4.
 ```
 
 See [SSL_TROUBLESHOOTING.md](../SSL_TROUBLESHOOTING.md) for more details.

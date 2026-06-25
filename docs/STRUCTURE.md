@@ -15,7 +15,8 @@ helmut4-helm-chart/
 │       ├── secrets.yaml                  # Docker registry + mongodb-credentials
 │       ├── configmap.yaml                # service-config ConfigMap (Spring Boot env vars)
 │       ├── ingress/
-│       │   └── nginx-ingress.yaml        # Nginx ingress with TLS
+│       │   ├── ingress.yaml              # networking.k8s.io/v1 Ingress (default)
+│       │   └── httproute.yaml            # gateway.networking.k8s.io/v1 HTTPRoute (opt-in)
 │       ├── services/
 │       │   └── deployments.yaml          # All 16 microservice deployments
 │       ├── infrastructure/
@@ -25,8 +26,10 @@ helmut4-helm-chart/
 │           └── pvc.yaml                  # helmut-storage-pvc + mongodb-backup-pvc
 │
 ├── examples/                             # Example configurations
-│   ├── values-production.yaml            # Production setup
-│   ├── values-development.yaml           # Development setup
+│   ├── values-production.yaml            # Production setup (ingress-nginx)
+│   ├── values-development.yaml           # Development setup (ingress-nginx)
+│   ├── values-ingress-traefik.yaml       # Traefik Ingress recipe
+│   ├── values-gateway-api.yaml           # Gateway API (HTTPRoute) recipe
 │   ├── values-aws-csi.yaml               # AWS EBS CSI Driver
 │   ├── values-azure-csi.yaml             # Azure Disk CSI Driver
 │   ├── values-migration-pv-names.yaml    # Migration using PV names
@@ -55,11 +58,14 @@ helmut4-helm-chart/
 
 ## Implemented Features
 
-### 1. Nginx-based Ingress
-- Replaces Traefik with standard Nginx Ingress
-- Path-based routing for all 16 services
-- TLS/SSL via cert-manager (Let's Encrypt or custom)
+### 1. Ingress / Gateway API routing
+- Single host, path-based routing for all 16 services — controller-neutral template
+- Two rendering modes, selected by `appIngress.api`:
+  - `ingress` (default) → `networking.k8s.io/v1` Ingress; works on any controller (defaults tuned for ingress-nginx, see README for per-controller annotation recipes)
+  - `gateway` → `gateway.networking.k8s.io/v1` HTTPRoute; references a pre-existing Gateway via `parentRef`
+- TLS via cert-manager (Let's Encrypt or custom) in Ingress mode; Gateway listener-owned in Gateway mode
 - WebStomp (`/ws` → RabbitMQ port 15674)
+- Note: kubernetes/ingress-nginx is [retiring March 2026](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/)
 
 ### 2. MongoDB Replica Set (cloudpirates/mongodb 0.10.3)
 - 3 replicas (`rs0`) for high availability
