@@ -9,11 +9,11 @@
 [![CI](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/actions/workflows/ci.yml)
 [![Pages](https://github.com/moovit-sp-gmbh/helmut4-helm-chart/actions/workflows/pages.yml/badge.svg?branch=main)](https://moovit-sp-gmbh.github.io/helmut4-helm-chart/)
 
-A complete Helm chart for the Helmut4 microservices application — MongoDB replica set, RabbitMQ with HTTP-backend auth wired to the Helmut user store, the full microservice fleet, an nginx Ingress with WebSTOMP, and an optional multi-volume storage layer that backs onto SMB / NFS / cloud CSI drivers.
+A complete Helm chart for the Helmut4 microservices application — MongoDB replica set, RabbitMQ with HTTP-backend auth wired to the Helmut user store, the full microservice fleet, an Ingress (or Gateway API HTTPRoute) with WebSTOMP, and an optional multi-volume storage layer that backs onto SMB / NFS / cloud CSI drivers.
 
 ## Features
 
-- **Nginx-based Ingress**: Path-based routing for all services, including STOMP-over-WebSocket on `/ws`
+- **Ingress / Gateway API routing**: Path-based routing for all services, including STOMP-over-WebSocket on `/ws`. Works with any Ingress controller (defaults tuned for ingress-nginx) or, opt-in, a Gateway API HTTPRoute.
 - **MongoDB Replica Set**: 3-node RS (`rs0`) via `cloudpirates/mongodb v0.10.3`, with all seeds wired into the Spring driver
 - **RabbitMQ**: single-node deployment by default (see [helmut4/values.yaml](helmut4/values.yaml) for the four pieces an HA cluster needs)
 - **Longhorn Block Storage**: MongoDB PVCs on Longhorn (50 Gi per replica)
@@ -25,7 +25,7 @@ A complete Helm chart for the Helmut4 microservices application — MongoDB repl
 
 - Kubernetes 1.24+
 - Helm 3.0+
-- Nginx Ingress Controller installed
+- An Ingress controller **or** a Gateway API implementation installed (see [Ingress controllers](#ingress-controllers) below)
 - Longhorn installed (for MongoDB block storage)
 - SMB CSI Driver (for application storage via `/Volumes`)
 - cert-manager (optional, for automatic TLS via Let's Encrypt)
@@ -168,7 +168,8 @@ rabbitmq:
 ```yaml
 appIngress:
   enabled: true
-  className: "nginx"
+  api: "ingress"                    # or "gateway" (HTTPRoute)
+  className: "nginx"                # ignored when api: gateway
   domain: "helmut.your-domain.com"
   tls:
     enabled: true
@@ -185,6 +186,51 @@ kubectl create secret tls helmut4-tls \
   --key=path/to/tls.key \
   -n helmut4
 ```
+
+### Ingress controllers
+
+> **⚠️ ingress-nginx retirement.** `kubernetes/ingress-nginx` (the controller
+> the chart defaults to) is being [retired in March 2026](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/) — existing
+> deployments keep running but get no security patches afterwards. Plan a
+> migration to another controller or to Gateway API.
+
+The chart's Ingress template is controller-neutral; only the default
+annotations in `appIngress.annotations` are nginx-specific. Pick the row
+that matches your cluster and override `className` + `annotations`:
+
+| Controller | `className` | Required annotations (for STOMP-over-WS) |
+|---|---|---|
+| ingress-nginx (default) | `nginx` | `nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"`<br>`nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"`<br>`nginx.ingress.kubernetes.io/proxy-http-version: "1.1"`<br>`nginx.ingress.kubernetes.io/ssl-redirect: "true"` |
+| NGINX Inc. (`nginxinc/kubernetes-ingress`) | `nginx` | `nginx.org/websocket-services: "rabbitmq,users"`<br>`nginx.org/proxy-read-timeout: "3600s"`<br>`nginx.org/proxy-send-timeout: "3600s"` |
+| Traefik | `traefik` | None on Ingress — WebSocket passes natively. Tune entrypoint `respondingTimeouts` in Traefik's static config if 60s default is too short. See [examples/values-ingress-traefik.yaml](examples/values-ingress-traefik.yaml). |
+| HAProxy (`haproxytech/kubernetes-ingress`) | `haproxy` | `haproxy.org/timeout-tunnel: "3600s"`<br>`haproxy.org/timeout-client: "3600s"`<br>`haproxy.org/timeout-server: "3600s"` |
+
+### Gateway API
+
+Set `appIngress.api: "gateway"` to render a `gateway.networking.k8s.io/v1`
+HTTPRoute instead of an Ingress. Requires a Gateway API implementation
+(Envoy Gateway, Istio, Cilium, Contour, etc.) and a pre-existing `Gateway`
+resource owned by your platform team:
+
+```yaml
+appIngress:
+  enabled: true
+  api: "gateway"
+  domain: "helmut.your-domain.com"
+  gateway:
+    parentRef:
+      name: "platform-gateway"
+      namespace: "gateway-system"
+      sectionName: "https"      # optional listener name
+```
+
+In Gateway mode the `appIngress.tls.*` block is ignored — TLS is
+terminated on the Gateway listener (operator-owned). cert-manager
+integration uses the `cert-manager.io/cluster-issuer` annotation on the
+**Gateway**, not the HTTPRoute. WebSocket passes natively on conformant
+implementations, but the **idle timeout is controller-specific** (Envoy
+defaults to 5 minutes — configure your controller's policy CRD if STOMP
+connections need longer). See [examples/values-gateway-api.yaml](examples/values-gateway-api.yaml).
 
 ### Storage (SMB for application volumes)
 
@@ -302,11 +348,16 @@ kubectl exec -n helmut4 -it mongodb-0 -- mongosh \
 kubectl exec -n helmut4 -it rabbitmq-0 -- rabbitmq-diagnostics ping
 ```
 
-### Ingress not working
+### Ingress / HTTPRoute not working
 
 ```bash
+# Ingress mode (default)
 kubectl get ingress -n helmut4
 kubectl describe ingress -n helmut4 helmut4-ingress
+
+# Gateway API mode (appIngress.api: gateway)
+kubectl get httproute -n helmut4
+kubectl describe httproute -n helmut4 helmut4-route
 ```
 
 See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more details.
@@ -326,8 +377,10 @@ See [docs/SECURITY.md](docs/SECURITY.md) for more details.
 
 | File | Description |
 |------|-------------|
-| `examples/values-production.yaml` | Production setup |
-| `examples/values-development.yaml` | Development setup |
+| `examples/values-production.yaml` | Production setup (ingress-nginx) |
+| `examples/values-development.yaml` | Development setup (ingress-nginx) |
+| `examples/values-ingress-traefik.yaml` | Traefik Ingress recipe |
+| `examples/values-gateway-api.yaml` | Gateway API (HTTPRoute) recipe |
 | `examples/values-aws-csi.yaml` | AWS EBS CSI Driver |
 | `examples/values-azure-csi.yaml` | Azure Disk CSI Driver |
 | `examples/values-migration-pv-names.yaml` | Migration with existing PV names |
@@ -337,7 +390,8 @@ See [docs/SECURITY.md](docs/SECURITY.md) for more details.
 
 - [Kubernetes Documentation](https://kubernetes.io/docs/)
 - [Helm Documentation](https://helm.sh/docs/)
-- [Nginx Ingress Controller](https://kubernetes.github.io/ingress-nginx/)
+- [ingress-nginx](https://kubernetes.github.io/ingress-nginx/) — note: [retiring March 2026](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/)
+- [Gateway API](https://gateway-api.sigs.k8s.io/) — the K8s-recommended successor; tool: [ingress2gateway](https://github.com/kubernetes-sigs/ingress2gateway)
 - [Longhorn](https://longhorn.io/docs/)
 - [RabbitMQ Kubernetes](https://www.rabbitmq.com/kubernetes/operator/operator-overview.html)
 - [docs/HA-DATABASE.md](docs/HA-DATABASE.md) — MongoDB/RabbitMQ HA

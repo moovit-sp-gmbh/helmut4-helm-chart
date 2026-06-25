@@ -2,17 +2,18 @@
 
 ## What Has Been Implemented
 
-### 1. Nginx-based Ingress (replacing Traefik)
+### 1. Ingress / Gateway API routing
 
-- Standard Nginx Ingress Controller instead of Traefik
-- Path-based routing for all services
-- TLS/SSL support via cert-manager annotation
-- All routes from `traefik.toml` migrated:
+- Single host, path-based routing for all services. Renderer is selected by `appIngress.api`:
+  - `ingress` (default) → `networking.k8s.io/v1` Ingress. Template is controller-neutral; defaults assume ingress-nginx (see README → "Ingress controllers" for Traefik / NGINX Inc. / HAProxy recipes). ingress-nginx itself is [retiring March 2026](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/).
+  - `gateway` → `gateway.networking.k8s.io/v1` HTTPRoute. References a pre-existing Gateway via `parentRef`; TLS lives on the Gateway listener.
+- TLS/SSL via cert-manager (Ingress mode only — Gateway mode delegates to the Gateway operator)
+- All routes from the original Traefik config migrated:
   - Service routes: `/v1/fx`, `/v1/co`, `/v1/io`, `/v1/hk`, etc.
   - WebStomp: `/ws` → RabbitMQ port 15674
   - Admin interface: `/panel`
   - Default: `/` → hw service
-  - File: `helmut4/templates/ingress/nginx-ingress.yaml`
+- Files: `helmut4/templates/ingress/ingress.yaml`, `helmut4/templates/ingress/httproute.yaml`
 
 ### 2. MongoDB Replica Set (sub-chart)
 
@@ -90,7 +91,8 @@ helmut4-helm-chart/
 │       ├── secrets.yaml                  # Docker registry + mongodb-credentials
 │       ├── configmap.yaml                # service-config ConfigMap
 │       ├── ingress/
-│       │   └── nginx-ingress.yaml
+│       │   ├── ingress.yaml
+│       │   └── httproute.yaml
 │       ├── services/
 │       │   └── deployments.yaml          # All 16 microservices
 │       ├── infrastructure/
@@ -101,6 +103,8 @@ helmut4-helm-chart/
 ├── examples/
 │   ├── values-production.yaml
 │   ├── values-development.yaml
+│   ├── values-ingress-traefik.yaml
+│   ├── values-gateway-api.yaml
 │   ├── values-aws-csi.yaml
 │   ├── values-azure-csi.yaml
 │   ├── values-migration-pv-names.yaml
