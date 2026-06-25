@@ -1,0 +1,43 @@
+# Example: Gateway API (HTTPRoute)
+#
+# Renders a `gateway.networking.k8s.io/v1` HTTPRoute instead of an
+# Ingress. Requires:
+#   1. A Gateway API implementation installed in the cluster — Envoy
+#      Gateway, Istio, Cilium, Contour, or another conformant
+#      controller. https://gateway-api.sigs.k8s.io/implementations/
+#   2. A pre-existing `Gateway` resource (typically owned by the
+#      platform team) with a listener that allows the hostname below.
+#      Referenced via `gateway.parentRef` — adjust to match your
+#      Gateway's `metadata.name`, `metadata.namespace`, and (optionally)
+#      `spec.listeners[].name`.
+#
+# Known gotchas:
+#   - WebSocket: HTTPRoute passes WS natively on the implementations
+#     above. No annotation equivalent of `proxy-http-version: 1.1` is
+#     needed.
+#   - Idle timeout: Envoy's default `stream_idle_timeout` is 5 minutes —
+#     the chart's 3600s nginx setting does NOT carry over. If STOMP
+#     connections drop after ~5 minutes, configure the implementation's
+#     policy CRD (e.g. Envoy Gateway `BackendTrafficPolicy`, Istio
+#     `Telemetry` / `DestinationRule`). This is not portable and lives
+#     outside the chart.
+#   - TLS: terminated on the Gateway listener (operator-owned). The
+#     chart's `appIngress.tls.*` block is ignored when `api: "gateway"`.
+#     cert-manager integration uses the `cert-manager.io/cluster-issuer`
+#     annotation on the Gateway, not the HTTPRoute.
+#   - ExternalDNS: reads HTTPRoute hostnames from `spec.hostnames`
+#     directly — no DNS annotation needed.
+
+appIngress:
+  enabled: true
+  api: "gateway"
+  domain: "helmut.example.com"
+
+  gateway:
+    parentRef:
+      # Match the Gateway resource your platform team manages.
+      name: "platform-gateway"
+      namespace: "gateway-system"
+      # Optional: pin to a specific listener (e.g. the HTTPS one).
+      sectionName: "https"
+    annotations: {}
