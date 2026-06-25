@@ -1,0 +1,137 @@
+{{- if and .Values.appIngress.enabled (eq .Values.appIngress.api "gateway") }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "helmut4.fullname" . }}-route
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" . | nindent 4 }}
+  {{- with .Values.appIngress.gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    - name: {{ required "appIngress.gateway.parentRef.name is required when appIngress.api is \"gateway\"" .Values.appIngress.gateway.parentRef.name | quote }}
+      {{- with .Values.appIngress.gateway.parentRef.namespace }}
+      namespace: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.appIngress.gateway.parentRef.sectionName }}
+      sectionName: {{ . | quote }}
+      {{- end }}
+  hostnames:
+    - {{ .Values.appIngress.domain | quote }}
+  rules:
+    # fx service
+    - matches:
+        - path: { type: PathPrefix, value: /v1/fx }
+      backendRefs:
+        - name: fx
+          port: {{ .Values.services.fx.port }}
+
+    # co service
+    - matches:
+        - path: { type: PathPrefix, value: /v1/co }
+      backendRefs:
+        - name: co
+          port: {{ .Values.services.co.port }}
+
+    # io service
+    - matches:
+        - path: { type: PathPrefix, value: /v1/io }
+      backendRefs:
+        - name: io
+          port: {{ .Values.services.io.port }}
+
+    # hk service
+    - matches:
+        - path: { type: PathPrefix, value: /v1/hk }
+      backendRefs:
+        - name: hk
+          port: {{ .Values.services.hk.port }}
+
+    # users service - /v1/members and /v1/ws
+    - matches:
+        - path: { type: PathPrefix, value: /v1/members }
+        - path: { type: PathPrefix, value: /v1/ws }
+      backendRefs:
+        - name: users
+          port: {{ .Values.services.users.port }}
+
+    # streams service
+    - matches:
+        - path: { type: PathPrefix, value: /v1/streams }
+        - path: { type: PathPrefix, value: /streamdesigner }
+      backendRefs:
+        - name: streams
+          port: {{ .Values.services.streams.port }}
+
+    # preferences service
+    - matches:
+        - path: { type: PathPrefix, value: /v1/preferences }
+      backendRefs:
+        - name: preferences
+          port: {{ .Values.services.preferences.port }}
+
+    # metadata service
+    - matches:
+        - path: { type: PathPrefix, value: /v1/metadataSet }
+        - path: { type: PathPrefix, value: /v1/metadata }
+      backendRefs:
+        - name: metadata
+          port: {{ .Values.services.metadata.port }}
+
+    # logging service
+    - matches:
+        - path: { type: PathPrefix, value: /v1/logging }
+      backendRefs:
+        - name: logging
+          port: {{ .Values.services.logging.port }}
+
+    # amqp service
+    - matches:
+        - path: { type: PathPrefix, value: /v1/amqp }
+      backendRefs:
+        - name: amqp
+          port: {{ .Values.services.amqp.port }}
+
+    # license service
+    - matches:
+        - path: { type: PathPrefix, value: /v1/license }
+        - path: { type: PathPrefix, value: /v1/client }
+      backendRefs:
+        - name: license
+          port: {{ .Values.services.license.port }}
+
+    # language service
+    - matches:
+        - path: { type: PathPrefix, value: /v1/language }
+        - path: { type: PathPrefix, value: /v1/languages }
+      backendRefs:
+        - name: language
+          port: {{ .Values.services.language.port }}
+
+    # RabbitMQ WebStomp (STOMP over WebSocket — wss://<domain>/ws)
+    # HTTPRoute passes WebSocket natively on conformant implementations.
+    # Idle timeout is controller-specific (Envoy default: 5 minutes);
+    # configure per-controller policy CRDs if STOMP connections need longer.
+    - matches:
+        - path: { type: PathPrefix, value: /ws }
+      backendRefs:
+        - name: rabbitmq
+          port: {{ .Values.rabbitmq.webstomp }}
+
+    # HP panel service
+    - matches:
+        - path: { type: PathPrefix, value: /panel }
+      backendRefs:
+        - name: hp
+          port: {{ .Values.services.hp.port }}
+
+    # HW service — catch-all for remaining `/` traffic (must come last)
+    - matches:
+        - path: { type: PathPrefix, value: / }
+      backendRefs:
+        - name: hw
+          port: {{ .Values.services.hw.port }}
+{{- end }}

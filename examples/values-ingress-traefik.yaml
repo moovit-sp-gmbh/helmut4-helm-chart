@@ -1,0 +1,33 @@
+# Example: Traefik Ingress Controller
+#
+# Traefik routes via standard `networking.k8s.io/v1` Ingress with
+# `ingressClassName: traefik`. Unlike ingress-nginx, Traefik does NOT
+# read the `nginx.ingress.kubernetes.io/*` annotations — it expects
+# routing/middleware config either as Traefik annotations
+# (`traefik.ingress.kubernetes.io/router.*`) or, for non-trivial
+# routing, separate `IngressRoute` / `Middleware` CRDs.
+#
+# WebSocket: Traefik passes WebSocket natively on standard Ingress —
+# no annotation needed for the RabbitMQ STOMP `/ws` path.
+#
+# Long-lived connections: Traefik's per-server idle timeout is 0
+# (unlimited) by default, but read/write timeouts default to 60s. If
+# your STOMP-over-WS connections drop after a minute, either tune the
+# Traefik entrypoint via static config (`--entrypoints.websecure.transport
+# .respondingTimeouts.readTimeout=3600s`) or attach a
+# `traefik.ingress.kubernetes.io/router.middlewares` annotation pointing
+# at a custom Middleware. This is platform-level config, not chart-level.
+
+appIngress:
+  enabled: true
+  className: "traefik"
+  domain: "helmut.example.com"
+  tls:
+    enabled: true
+    provider: "letsencrypt"
+    certIssuer: "letsencrypt-prod"
+  # Traefik reads cert-manager / ACME settings from its own static config
+  # or from CRDs; no nginx-style annotations apply here. Set to `null`
+  # to clear the chart's nginx defaults — `{}` alone won't, since Helm
+  # deep-merges maps.
+  annotations: null

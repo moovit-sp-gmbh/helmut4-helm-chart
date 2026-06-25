@@ -1,4 +1,4 @@
-{{- if .Values.appIngress.enabled }}
+{{- if and .Values.appIngress.enabled (ne .Values.appIngress.api "gateway") }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -6,11 +6,15 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "helmut4.labels" . | nindent 4 }}
+  {{- if or .Values.appIngress.annotations (eq .Values.appIngress.tls.provider "letsencrypt") }}
   annotations:
-    {{- toYaml .Values.appIngress.annotations | nindent 4 }}
+    {{- with .Values.appIngress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
     {{- if eq .Values.appIngress.tls.provider "letsencrypt" }}
     cert-manager.io/cluster-issuer: {{ .Values.appIngress.tls.certIssuer | quote }}
     {{- end }}
+  {{- end }}
 spec:
   {{- if .Values.appIngress.className }}
   ingressClassName: {{ .Values.appIngress.className }}

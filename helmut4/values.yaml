@@ -141,22 +141,41 @@ serviceAccount:
   # -- Name of the ServiceAccount referenced from every Deployment.
   name: helmut4-sa
 
-# -- Public Ingress that fronts every Helmut4 microservice (one host, many
-# path prefixes). Disabling this requires routing the services through
-# another mechanism.
+# -- Public Ingress / HTTPRoute that fronts every Helmut4 microservice
+# (one host, many path prefixes). Disabling this requires routing the
+# services through another mechanism.
+#
+# kubernetes/ingress-nginx is being retired in March 2026
+# (https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/). The
+# defaults below still target ingress-nginx so existing installs keep
+# working; new installs can pick another controller or switch to Gateway
+# API (`api: "gateway"`). See README → "Ingress controllers" for recipes.
 appIngress:
-  # -- Render the application Ingress object.
+  # -- Render the application routing resource.
   enabled: true
-  # -- IngressClass name. The chart is tested against `nginx`
-  # (kubernetes/ingress-nginx); other controllers may need different
-  # annotations.
+
+  # -- Routing API. `ingress` renders a `networking.k8s.io/v1` Ingress
+  # (default, backwards compatible); `gateway` renders a
+  # `gateway.networking.k8s.io/v1` HTTPRoute and requires a pre-existing
+  # Gateway in the cluster (typically owned by the platform team). The
+  # two modes are mutually exclusive — only one resource is rendered.
+  api: "ingress"
+
+  # -- IngressClass name. Used only when `api` is `ingress`. Defaults to
+  # `nginx` for kubernetes/ingress-nginx; common alternatives are
+  # `traefik`, `nginx` (NGINX Inc.'s controller — same class, different
+  # annotation prefix `nginx.org/*`) and `haproxy`.
   className: "nginx"
 
-  # -- Public hostname terminated by the Ingress.
+  # -- Public hostname terminated by the Ingress / matched by the
+  # HTTPRoute. Becomes `spec.rules[].host` for Ingress or
+  # `spec.hostnames[]` for HTTPRoute.
   domain: "helmut-k8s.moovit24.de"
 
   tls:
-    # -- Enable TLS termination on the Ingress.
+    # -- Enable TLS termination on the Ingress. Ignored when
+    # `api: "gateway"` — Gateway API terminates TLS on the Gateway
+    # listener (operator-owned), not on the HTTPRoute.
     enabled: true
     # -- Name of the Secret used by the TLS section of the Ingress. Created
     # automatically when `tls.provider` is `letsencrypt`.
@@ -177,16 +196,44 @@ appIngress:
     # `custom`. Mounted from a pre-existing Secret.
     keyFile: "/etc/tls/certs/tls.key"
 
-  # -- Annotations applied to the Ingress object. The defaults enable
-  # WebSocket support for STOMP-over-WS (RabbitMQ `/ws`) and the users
-  # service (`/v1/ws`); ingress-nginx already sets `Upgrade`/`Connection`
-  # natively, so only HTTP/1.1 and the long timeouts need to be forced
-  # explicitly.
+  # -- Annotations applied to the Ingress object. Defaults assume
+  # kubernetes/ingress-nginx and enable WebSocket support for
+  # STOMP-over-WS (RabbitMQ `/ws`) and the users service (`/v1/ws`):
+  # ingress-nginx already sets `Upgrade`/`Connection` natively, so only
+  # HTTP/1.1 and the long timeouts need to be forced explicitly. Replace
+  # these when running another controller — see README → "Ingress
+  # controllers" for per-controller recipes. Ignored when
+  # `api: "gateway"` (HTTPRoute annotations live under `gateway.annotations`).
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+
+  # -- Gateway API settings. Used only when `api: "gateway"`. The Gateway
+  # itself is NOT chart-managed — it belongs to the platform team and is
+  # referenced via `parentRef`. cert-manager integration for Gateway API
+  # uses the `cert-manager.io/cluster-issuer` annotation on the Gateway
+  # (not on the HTTPRoute), so TLS lives entirely outside this chart in
+  # Gateway mode. WebSocket support is native to HTTPRoute on conformant
+  # implementations (Envoy Gateway, Istio, Cilium, Contour), but idle
+  # timeouts are implementation-specific (Envoy defaults to 5 minutes —
+  # configure per-controller policy CRDs if your STOMP connections need
+  # longer).
+  gateway:
+    parentRef:
+      # -- Name of the Gateway resource that terminates traffic.
+      name: ""
+      # -- Namespace of the Gateway. Empty means the HTTPRoute's namespace.
+      # Cross-namespace references require a ReferenceGrant on the Gateway side.
+      namespace: ""
+      # -- Optional listener name (`spec.listeners[].name` on the Gateway).
+      sectionName: ""
+    # -- Annotations applied to the HTTPRoute. Most users leave this empty;
+    # implementation-specific traffic policies (timeouts, retries) are
+    # usually separate CRs (e.g. Envoy Gateway `BackendTrafficPolicy`,
+    # Istio `DestinationRule`) and not chart-managed.
+    annotations: {}
 
 # -- Credentials for the private Docker registry that hosts the Helmut4
 # images. Rendered into a `kubernetes.io/dockerconfigjson` Secret named

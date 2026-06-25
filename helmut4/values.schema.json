@@ -168,6 +168,11 @@
       "required": ["enabled", "domain"],
       "properties": {
         "enabled": { "type": "boolean" },
+        "api": {
+          "type": "string",
+          "enum": ["ingress", "gateway"],
+          "description": "Routing API. `ingress` renders a networking.k8s.io/v1 Ingress (default); `gateway` renders a gateway.networking.k8s.io/v1 HTTPRoute."
+        },
         "className": { "type": "string", "minLength": 1 },
         "domain": {
           "type": "string",
@@ -190,6 +195,26 @@
         "annotations": {
           "type": "object",
           "additionalProperties": { "type": ["string", "number", "boolean"] }
+        },
+        "gateway": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Gateway API settings. Used only when `api` is `gateway`.",
+          "properties": {
+            "parentRef": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name": { "type": "string" },
+                "namespace": { "type": "string" },
+                "sectionName": { "type": "string" }
+              }
+            },
+            "annotations": {
+              "type": "object",
+              "additionalProperties": { "type": ["string", "number", "boolean"] }
+            }
+          }
         }
       }
     },
