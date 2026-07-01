@@ -209,6 +209,8 @@ appIngress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    # Preferences restore/import POSTs exceed nginx's 1m default; raise if larger.
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
 
   # -- Gateway API settings. Used only when `api: "gateway"`. The Gateway
   # itself is NOT chart-managed — it belongs to the platform team and is
