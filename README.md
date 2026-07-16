@@ -267,6 +267,10 @@ credentials:
 Services with `volumeMounts: true` (auto-mount every `appMount: true` volume):
 `fx`, `co`, `io`, `users`, `streams`, `license`.
 
+The `mongobackup` share (`appMount: false`) feeds the optional scheduled backup
+Deployment — set `mongobackup.enabled: true` to dump every database to it on a
+cron. See [docs/HA-DATABASE.md](docs/HA-DATABASE.md#backup-and-restore).
+
 ### Service Replicas and Resources
 
 ```yaml

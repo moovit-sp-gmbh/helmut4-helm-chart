@@ -106,10 +106,41 @@ kubectl port-forward -n helmut4 rabbitmq-0 15672:15672
 
 ## Backup and Restore
 
-The chart does not ship a managed backup workload. The bundled
-`scripts/backup.sh` wrapper runs `mongodump` inside `mongodb-0` and
-`kubectl cp`s the result to local disk; schedule it from cron / a CI
-runner / a node-level systemd timer to suit your retention policy.
+Two backup options ship with the chart:
+
+- **Scheduled `mongobackup` Deployment** (opt-in) — runs the moovit
+  `mcc_mongodb_backup` container on an internal cron; see below.
+- **`scripts/backup.sh`** (ad-hoc) — runs `mongodump` inside `mongodb-0`
+  and `kubectl cp`s the result to local disk; schedule it from cron / a CI
+  runner / a node-level systemd timer to suit your retention policy.
+
+> Restoring a database from the Helmut frontend is served by the
+> `preferences` service (`/v1/preferences/restore`), not by these tools.
+
+### Scheduled MongoDB Backup (mongobackup)
+
+Enable the bundled backup Deployment:
+
+```yaml
+mongobackup:
+  enabled: true
+  tag: "4.12.0.1"          # compatible with the bundled MongoDB 8
+  schedule: "0 */4 * * *"  # container-internal cron
+  maxBackups: 180
+  backupClaim: "mongobackup-pvc"
+```
+
+It dumps every database to `<mongobackup share>/<timestamp>/…archive.gz`
+and prunes to `maxBackups`. Prerequisites:
+
+- A backup volume: add a `global.storage.volumes` entry (e.g. `mongobackup`,
+  `appMount: false`), then create its share subfolder — the CSI mount fails
+  if the target directory does not exist yet.
+- Keep the tag at `4.12.x`; the `4.1.x` tag the upstream docs still list
+  fails SASL auth against MongoDB 8.
+- It dumps from a single replica member (`mongoHost`, default `mongodb-0`).
+  Never point it at the load-balanced `mongodb` service — parallel cursors
+  spread across members cause `CursorNotFound`.
 
 ### MongoDB Backup (ad-hoc)
 
@@ -137,9 +168,9 @@ kubectl exec -n helmut4 mongodb-0 -- mongorestore \
   /tmp/restore
 ```
 
-> The `mongobackup` volume (when configured with `appMount: false`)
-> exists so a backup CronJob or sidecar can write to it; the chart
-> itself currently provisions only the PVC.
+> The `mongobackup` volume (`appMount: false`) is the share the scheduled
+> `mongobackup` Deployment writes its dumps to. With that Deployment
+> disabled the PVC is provisioned but unused.
 
 ### RabbitMQ Definitions Export
 
