@@ -133,9 +133,10 @@ spec:
       storage: 50Gi
 ```
 
-Defined separately so a future backup workload can mount it; the chart
-itself doesn't ship a CronJob, so the PVC is provisioned but unused until
-you add one (or run `scripts/backup.sh` manually).
+Mounted at `/backup` by the optional `mongobackup` Deployment
+(`mongobackup.enabled: true`). With that Deployment disabled the PVC is
+provisioned but unused. Create the share subfolder before enabling — the
+CSI mount fails if the target directory does not exist yet.
 
 ## Troubleshooting
 
