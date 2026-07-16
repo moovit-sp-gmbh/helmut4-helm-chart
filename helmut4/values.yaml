@@ -78,24 +78,27 @@ global:
   imagePullSecrets:
     - name: docker-registry-secret-json
 
-  # -- (object) Pod-level `securityContext` applied to every Deployment
-  # the chart renders. Leave empty to keep cluster defaults; populate
-  # when the platform requires non-root execution or a specific `fsGroup`
-  # so the mounted PVCs are writable. Example:
-  #   runAsNonRoot: true
-  #   runAsUser: 999
-  #   fsGroup: 999  # match the SMB mountOptions (uid=999, gid=999)
-  podSecurityContext: {}
+  # -- (object) Pod-level securityContext for every app Deployment. Runs
+  # non-root as 999 to match the SMB mount (uid=999,gid=999). The mongobackup
+  # container is exempt — its image needs root (see `mongobackup`).
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
 
-  # -- (object) Container-level `securityContext` applied to every
-  # container the chart renders. Leave empty for cluster defaults.
-  # Common hardening (only enable after verifying the Helmut4 services
-  # actually run with these constraints):
-  #   allowPrivilegeEscalation: false
-  #   readOnlyRootFilesystem: false  # Spring Boot writes to /tmp
-  #   capabilities:
-  #     drop: ["ALL"]
-  containerSecurityContext: {}
+  # -- (object) Container-level securityContext for every app container.
+  # readOnlyRootFilesystem is left off — Spring Boot writes to /tmp.
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+
+  # -- Auto-mount the ServiceAccount token into app pods. Off: the services
+  # reach each other by DNS, not the K8s API. Set true if a service needs it.
+  automountServiceAccountToken: false
 
   storage:
     # -- CSI driver that backs the application file storage (e.g.
@@ -140,6 +143,18 @@ serviceAccount:
   create: true
   # -- Name of the ServiceAccount referenced from every Deployment.
   name: helmut4-sa
+
+# -- Namespace NetworkPolicies: default-deny ingress, then allow only
+# intra-namespace traffic and the ingress controller. Requires a CNI that
+# enforces NetworkPolicy (Calico/Canal/Cilium). Egress is left open.
+networkPolicy:
+  # -- Render the NetworkPolicies. Opt-in — verify your CNI enforces them
+  # and that `ingressControllerNamespace` is correct before enabling.
+  enabled: false
+  # -- Namespace the ingress controller runs in (allowed to reach services).
+  # RKE2/ingress-nginx defaults to `kube-system`; ingress-nginx charts use
+  # `ingress-nginx`.
+  ingressControllerNamespace: "kube-system"
 
 # -- Public Ingress / HTTPRoute that fronts every Helmut4 microservice
 # (one host, many path prefixes). Disabling this requires routing the
@@ -496,6 +511,13 @@ podDisruptionBudget:
   # Integers are absolute; strings ending in `%` are percentages.
   minAvailable: 1
 
+# -- Spread each service's replicas across nodes so a single node loss can't
+# take all replicas of a service down. Soft (`ScheduleAnyway`), so it never
+# blocks scheduling on small clusters.
+topologySpread:
+  # -- Add topologySpreadConstraints to every microservice Deployment.
+  enabled: true
+
 # -- HorizontalPodAutoscaler for every microservice. Requires
 # `metrics-server` in the cluster. When enabled the static
 # `services.<name>.replicas` / `serviceReplicas` is dropped from the
@@ -543,6 +565,8 @@ services:
     tag: *hpVersion
     port: 8081
     replicas: 2
+    # -- nginx image: keeps root (can't write /var/cache/nginx as non-root).
+    runAsRoot: true
     resources:
       requests:
         cpu: "250m"
@@ -557,6 +581,8 @@ services:
     tag: *hwVersion
     port: 8080
     replicas: 2
+    # -- nginx image: keeps root (can't write /var/cache/nginx as non-root).
+    runAsRoot: true
     resources:
       requests:
         cpu: "250m"
@@ -777,6 +803,11 @@ mongobackup:
   # -- Existing PVC mounted at `/backup`. Pair with a `global.storage.volumes`
   # entry (`appMount: false`); the PVC is named `<volume-name>-pvc`.
   backupClaim: "mongobackup-pvc"
+  # -- Pod securityContext for the backup pod. Empty by design: the
+  # mcc_mongodb_backup image needs root (writes scripts to /, runs crontab).
+  podSecurityContext: {}
+  # -- Container securityContext for the backup pod. Empty = root.
+  containerSecurityContext: {}
   # -- Resource requests / limits for the backup pod.
   resources:
     requests:
