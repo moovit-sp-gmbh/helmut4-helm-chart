@@ -111,6 +111,13 @@ spec:
         - name: language
           port: {{ .Values.services.language.port }}
 
+    # cronjob service
+    - matches:
+        - path: { type: PathPrefix, value: /v1/cronjob }
+      backendRefs:
+        - name: cronjob
+          port: {{ .Values.services.cronjob.port }}
+
     # RabbitMQ WebStomp (STOMP over WebSocket — wss://<domain>/ws)
     # HTTPRoute passes WebSocket natively on conformant implementations.
     # Idle timeout is controller-specific (Envoy default: 5 minutes);

@@ -178,7 +178,16 @@ spec:
                 name: language
                 port:
                   number: {{ .Values.services.language.port }}
-          
+
+          # cronjob service
+          - path: /v1/cronjob
+            pathType: Prefix
+            backend:
+              service:
+                name: cronjob
+                port:
+                  number: {{ .Values.services.cronjob.port }}
+
           # RabbitMQ WebStomp (STOMP over WebSocket – wss://<domain>/ws)
           # Requires WebSocket proxy annotations set on this Ingress (see appIngress.annotations)
           - path: /ws
