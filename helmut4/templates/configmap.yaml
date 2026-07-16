@@ -11,7 +11,8 @@ data:
   {{- $ns   := .Values.namespace }}
   SPRING_DATA_MONGODB_HOST: {{ printf "%s-0.%s-headless.%s.svc.cluster.local" $name $name $ns | quote }}
   SPRING_DATA_MONGODB_PORT: "27017"
-  SPRING_DATA_MONGODB_DATABASE: {{ .Values.mongodb.database | default "helmut4" | quote }}
+  # No SPRING_DATA_MONGODB_DATABASE: each service uses its native per-service DB
+  # (mcc_*/mcp_*), matching docker-compose and required for backup/restore.
   SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE: "admin"
   {{- if .Values.mongodb.replicaSet.enabled }}
   SPRING_DATA_MONGODB_REPLICA_SET_NAME: {{ .Values.mongodb.replicaSet.name | quote }}
