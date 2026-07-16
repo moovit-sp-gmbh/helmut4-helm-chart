@@ -2,7 +2,7 @@ apiVersion: v2
 name: helmut4
 description: A Helm chart for Helmut4 microservices application
 type: application
-version: 1.1.0
+version: 1.2.0
 appVersion: "4.12"
 icon: https://www.helmut.de/wp-content/uploads/sites/5/2024/08/helmut-logo-small.png
 keywords:
