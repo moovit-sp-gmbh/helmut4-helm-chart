@@ -752,3 +752,36 @@ services:
       limits:
         cpu: "1"
         memory: "1Gi"
+
+# -- Scheduled MongoDB backup (moovit `mcc_mongodb_backup` container: internal
+# cron, dumps to the backup share). Restore is handled by the preferences
+# service, not here. Needs a backup volume — add a `global.storage.volumes`
+# entry with `appMount: false` and create its share subfolder first.
+mongobackup:
+  # -- Render the backup Deployment.
+  enabled: false
+  # -- Backup image repository (prefixed with `global.registry`).
+  image: mcc_mongodb_backup
+  # -- Backup image tag. 4.12.x ships a mongodump compatible with MongoDB 8;
+  # older 4.1.x tags fail SASL auth against it.
+  tag: "4.12.0.1"
+  # -- MongoDB member to dump from (empty = first replica's headless DNS). Must
+  # be ONE member, never the load-balanced `mongodb` service (else CursorNotFound).
+  mongoHost: ""
+  # -- Container-internal cron schedule. Default every 4 hours.
+  schedule: "0 */4 * * *"
+  # -- Number of backups to keep before the oldest are pruned.
+  maxBackups: 180
+  # -- Run a backup immediately on container start.
+  initBackup: true
+  # -- Existing PVC mounted at `/backup`. Pair with a `global.storage.volumes`
+  # entry (`appMount: false`); the PVC is named `<volume-name>-pvc`.
+  backupClaim: "mongobackup-pvc"
+  # -- Resource requests / limits for the backup pod.
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"

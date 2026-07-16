@@ -280,6 +280,22 @@
       "type": "object",
       "description": "Per-microservice deployment settings. Every value follows the `service` shape.",
       "additionalProperties": { "$ref": "#/definitions/service" }
+    },
+    "mongobackup": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Scheduled MongoDB backup Deployment (moovit mcc_mongodb_backup container).",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "type": "string", "minLength": 1 },
+        "tag": { "type": ["string", "number"], "minLength": 1 },
+        "mongoHost": { "type": "string" },
+        "schedule": { "type": "string", "minLength": 1 },
+        "maxBackups": { "type": ["integer", "string"], "minimum": 1 },
+        "initBackup": { "type": "boolean" },
+        "backupClaim": { "type": "string", "minLength": 1 },
+        "resources": { "$ref": "#/definitions/resources" }
+      }
     }
   }
 }

@@ -1,0 +1,75 @@
+{{- if .Values.mongobackup.enabled }}
+{{- $mb := .Values.mongobackup }}
+{{- $mongoName := .Values.mongodb.fullnameOverride | default "mongodb" }}
+{{- /* Dump from ONE replica member, never the load-balanced `mongodb` service:
+       parallel cursors spread across members cause CursorNotFound. */}}
+{{- $host := $mb.mongoHost | default (printf "%s-0.%s-headless.%s.svc.cluster.local" $mongoName $mongoName .Values.namespace) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongobackup
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" . | nindent 4 }}
+    app: mongobackup
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongobackup
+  template:
+    metadata:
+      annotations:
+        checksum/mongodb-auth: {{ printf "%s:%s" ($.Values.mongodb.auth.rootUsername | toString) ($.Values.mongodb.auth.rootPassword | toString) | sha256sum }}
+      labels:
+        app: mongobackup
+        {{- include "helmut4.labels" . | nindent 8 }}
+    spec:
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "helmut4.serviceAccountName" . }}
+      {{- with .Values.global.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: mongobackup
+          image: "{{ .Values.global.registry }}/{{ $mb.image }}:{{ $mb.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          {{- with .Values.global.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: MONGODB_HOST
+              value: {{ $host | quote }}
+            - name: MONGODB_PORT
+              value: "27017"
+            - name: MONGODB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helmut4.mongodb.secretName" . }}
+                  key: {{ include "helmut4.mongodb.usernameKey" . }}
+            - name: MONGODB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helmut4.mongodb.secretName" . }}
+                  key: {{ include "helmut4.mongodb.passwordKey" . }}
+            - name: CRON_TIME
+              value: {{ $mb.schedule | quote }}
+            - name: MAX_BACKUPS
+              value: {{ $mb.maxBackups | quote }}
+            - name: INIT_BACKUP
+              value: {{ $mb.initBackup | quote }}
+          resources:
+            {{- toYaml $mb.resources | nindent 12 }}
+          volumeMounts:
+            - name: backup
+              mountPath: /backup
+      volumes:
+        - name: backup
+          persistentVolumeClaim:
+            claimName: {{ $mb.backupClaim }}
+{{- end }}
