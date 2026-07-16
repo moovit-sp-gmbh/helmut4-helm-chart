@@ -259,8 +259,8 @@ mongodb:
   # -- Override the rendered Service / StatefulSet name (kept short so the
   # microservices can reach `mongodb:27017`).
   fullnameOverride: "mongodb"
-  # -- Database created at first start; the microservices connect to it by
-  # name.
+  # -- Initial database created by the MongoDB subchart. NOT used by the
+  # microservices — they use their native per-service DBs (mcc_*/mcp_*).
   database: "helmut4"
 
   auth:
