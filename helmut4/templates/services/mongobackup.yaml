@@ -30,7 +30,11 @@ spec:
         {{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "helmut4.serviceAccountName" . }}
-      {{- with .Values.global.podSecurityContext }}
+      automountServiceAccountToken: false
+      {{- /* mongobackup uses its OWN securityContext (default root): the
+             mcc_mongodb_backup image writes scripts to / and runs crontab,
+             so it can't run non-root like the Spring services. */}}
+      {{- with $mb.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -38,7 +42,7 @@ spec:
         - name: mongobackup
           image: "{{ .Values.global.registry }}/{{ $mb.image }}:{{ $mb.tag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-          {{- with .Values.global.containerSecurityContext }}
+          {{- with $mb.containerSecurityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
