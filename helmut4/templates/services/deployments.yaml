@@ -52,18 +52,32 @@ spec:
         {{- toYaml $root.Values.global.imagePullSecrets | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "helmut4.serviceAccountName" $root }}
+      automountServiceAccountToken: {{ $root.Values.global.automountServiceAccountToken | default false }}
+      {{- if not $service.runAsRoot }}
       {{- with $root.Values.global.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      {{- if ($root.Values.topologySpread | default dict).enabled }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: {{ $service.name }}
       {{- end }}
 
       containers:
         - name: {{ $service.name }}
           image: "{{ $root.Values.global.registry }}/{{ $service.image }}:{{ $service.tag }}"
           imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          {{- if not $service.runAsRoot }}
           {{- with $root.Values.global.containerSecurityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- end }}
           {{- if $service.port }}
           ports:
