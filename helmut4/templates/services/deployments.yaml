@@ -110,18 +110,25 @@ spec:
             {{- toYaml $service.resources | nindent 12 }}
           
           {{- if $service.port }}
+          # startupProbe gates the slow JVM boot; liveness/readiness only run
+          # once it passes (up to 30*10s = 5m). No actuator on these images, so tcpSocket.
+          startupProbe:
+            tcpSocket:
+              port: {{ $service.port }}
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+
           livenessProbe:
             tcpSocket:
               port: {{ $service.port }}
-            initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
-          
+
           readinessProbe:
             tcpSocket:
               port: {{ $service.port }}
-            initialDelaySeconds: 30
             periodSeconds: 5
             timeoutSeconds: 5
             failureThreshold: 3
