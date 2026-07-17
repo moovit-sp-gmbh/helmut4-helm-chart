@@ -1,6 +1,6 @@
 # helmut4
 
-![Version: 1.2.0](https://img.shields.io/badge/Version-1.2.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 4.12](https://img.shields.io/badge/AppVersion-4.12-informational?style=flat-square)
+![Version: 1.3.0](https://img.shields.io/badge/Version-1.3.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 4.12](https://img.shields.io/badge/AppVersion-4.12-informational?style=flat-square)
 
 A Helm chart for Helmut4 microservices application
 
@@ -61,9 +61,9 @@ A Helm chart for Helmut4 microservices application
 | docker.password | string | `"public"` | Registry password. The default `public` works for the public images. |
 | docker.registry | string | `"repo.moovit24.de:443"` | Registry hostname (and optional port) that the Secret is scoped to. |
 | docker.username | string | `"moovit"` | Registry username. The default `moovit` works for the public images. |
-| global | object | `{"automountServiceAccountToken":false,"containerSecurityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}},"environment":"production","imagePullPolicy":"IfNotPresent","imagePullSecrets":[{"name":"docker-registry-secret-json"}],"podSecurityContext":{"fsGroup":999,"runAsGroup":999,"runAsNonRoot":true,"runAsUser":999,"seccompProfile":{"type":"RuntimeDefault"}},"registry":"repo.moovit24.de:443","storage":{"csiDriver":"csi-driver-name","storageClassName":"helmut4-csi-storage","volumes":[{"appMount":true,"mountPath":"/Volumes/Helmut","name":"helmut-storage","size":"100Gi","source":""}]}}` | Cluster-wide defaults shared by every microservice Deployment. |
+| global | object | `{"automountServiceAccountToken":false,"containerSecurityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true},"environment":"production","imagePullPolicy":"IfNotPresent","imagePullSecrets":[{"name":"docker-registry-secret-json"}],"podSecurityContext":{"fsGroup":999,"runAsGroup":999,"runAsNonRoot":true,"runAsUser":999,"seccompProfile":{"type":"RuntimeDefault"}},"registry":"repo.moovit24.de:443","storage":{"csiDriver":"csi-driver-name","storageClassName":"helmut4-csi-storage","volumes":[{"appMount":true,"mountPath":"/Volumes/Helmut","name":"helmut-storage","size":"100Gi","source":""}]}}` | Cluster-wide defaults shared by every microservice Deployment. |
 | global.automountServiceAccountToken | bool | `false` | Auto-mount the ServiceAccount token into app pods. Off: the services reach each other by DNS, not the K8s API. Set true if a service needs it. |
-| global.containerSecurityContext | object | `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}` | Container-level securityContext for every app container. readOnlyRootFilesystem is left off — Spring Boot writes to /tmp. |
+| global.containerSecurityContext | object | `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true}` | Container-level securityContext for every app container. Root FS is read-only; each non-root service gets a writable /tmp emptyDir (Tomcat work dirs, JVM temp). The nginx services (hp/hw) are exempt. |
 | global.environment | string | `"production"` | Free-form environment tag exposed to the workloads. Common values are `production`, `staging`, `development`. |
 | global.imagePullPolicy | string | `"IfNotPresent"` | Pod-level image pull policy applied to every container the chart renders. One of `Always`, `IfNotPresent`, `Never`. |
 | global.imagePullSecrets | list | `[{"name":"docker-registry-secret-json"}]` | List of `imagePullSecrets` attached to every workload. The default entry refers to the Secret created from `docker.*` below. |
@@ -141,7 +141,7 @@ A Helm chart for Helmut4 microservices application
 | rbac.createNamespace | bool | `true` | Also render a `Namespace` object. Set to `false` if the namespace already exists or is managed elsewhere. |
 | serviceAccount.create | bool | `true` | Render a dedicated ServiceAccount for the workloads. |
 | serviceAccount.name | string | `"helmut4-sa"` | Name of the ServiceAccount referenced from every Deployment. |
-| serviceMonitor | object | `{"enabled":false,"interval":"30s","labels":{},"path":"/actuator/prometheus","scrapeTimeout":"10s"}` | Prometheus Operator ServiceMonitor for every microservice. Requires the prometheus-operator CRDs (`monitoring.coreos.com/v1`) in the cluster. The services expose Spring Boot Actuator on the same port as the application traffic. |
+| serviceMonitor | object | `{"enabled":false,"interval":"30s","labels":{},"path":"/actuator/prometheus","scrapeTimeout":"10s"}` | Prometheus Operator ServiceMonitor for every microservice. Requires the prometheus-operator CRDs (`monitoring.coreos.com/v1`) in the cluster AND a Spring Boot Actuator + micrometer-registry-prometheus on the image serving `path`. The default Helmut4 images do NOT bundle actuator, so `/actuator/prometheus` returns 404 — build actuator into the images (or point `path` at a real metrics endpoint) before enabling this. |
 | serviceMonitor.enabled | bool | `false` | Render the ServiceMonitors. |
 | serviceMonitor.interval | string | `"30s"` | Scrape interval. |
 | serviceMonitor.labels | object | `{}` | Extra labels to attach (e.g. `release: prometheus` so the prometheus-operator picks the SM up). |
