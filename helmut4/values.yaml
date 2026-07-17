@@ -539,9 +539,11 @@ autoscaling:
   targetMemoryUtilizationPercentage: null
 
 # -- Prometheus Operator ServiceMonitor for every microservice. Requires
-# the prometheus-operator CRDs (`monitoring.coreos.com/v1`) in the
-# cluster. The services expose Spring Boot Actuator on the same port as
-# the application traffic.
+# the prometheus-operator CRDs (`monitoring.coreos.com/v1`) in the cluster
+# AND a Spring Boot Actuator + micrometer-registry-prometheus on the image
+# serving `path`. The default Helmut4 images do NOT bundle actuator, so
+# `/actuator/prometheus` returns 404 — build actuator into the images (or
+# point `path` at a real metrics endpoint) before enabling this.
 serviceMonitor:
   # -- Render the ServiceMonitors.
   enabled: false
