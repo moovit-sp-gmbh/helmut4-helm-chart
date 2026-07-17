@@ -90,9 +90,11 @@ global:
       type: RuntimeDefault
 
   # -- (object) Container-level securityContext for every app container.
-  # readOnlyRootFilesystem is left off — Spring Boot writes to /tmp.
+  # Root FS is read-only; each non-root service gets a writable /tmp emptyDir
+  # (Tomcat work dirs, JVM temp). The nginx services (hp/hw) are exempt.
   containerSecurityContext:
     allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
     capabilities:
       drop: ["ALL"]
 
