@@ -37,6 +37,25 @@ log, which is the licensed-seat limit surfacing rather than a bug.
 The three endpoint URLs are read straight from the ConfigMap the chart already renders, so the
 autologin file always points at the deployed release — there is nothing to configure.
 
+## The WebSocket URL in the generated file
+
+The generated file is base64 and decodes to a single line:
+
+```
+wss://localhost:8881/ws?token=Bearer%20<jwt>
+  &userEndpoint=…&streamEndpoint=…&ioEndpoint=…
+```
+
+The three `*Endpoint` values are exactly what we send, but the `wss://localhost:8881/ws` prefix
+is produced server-side and is not influenced by the request body — a file downloaded from the
+Users menu carries the same prefix, since the endpoint accepts only those three fields. The
+chart meanwhile routes `/v1/ws` to `users:8000`, and that endpoint is live.
+
+So the client appears to derive its socket from `userEndpoint` rather than using that literal
+host; a client on any machine other than the Helmut server could not connect otherwise. If a
+client pod starts but never appears as connected in the Users menu, this is the first thing to
+check — `kubectl logs <pod> -c client-<type>` will show the socket it actually dialled.
+
 ## Development
 
 ```sh
