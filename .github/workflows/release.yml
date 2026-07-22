@@ -3,7 +3,8 @@ name: Release Helm Chart
 on:
   push:
     tags:
-      - '**'  # any tag — releases follow either `v*` semver or named tags like `beta`/`rc1`
+      - '**'                      # any tag — `v*` semver or named tags like `beta`/`rc1`
+      - '!client-autologin-v*'    # except the init image's own tags, which ship no chart
 
 permissions:
   contents: write
