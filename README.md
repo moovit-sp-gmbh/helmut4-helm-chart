@@ -315,10 +315,17 @@ linuxClients:
         maxReplicas: 8                       # never above the size of the pool
 ```
 
-The users must already exist in Helmut with "Render Node" enabled — they consume licensed
-seats, so the chart does not create them. Keep each type's `maxReplicas` at or below its pool
-size; a pod with no free user left to claim stays in `Init:CrashLoopBackOff`, with the reason
-in `kubectl logs <pod> -c autologin`.
+The users must already exist in Helmut with "Render Node" enabled — the chart does not create
+them. Two separate limits bound `maxReplicas`:
+
+- **the user pool** — a pod with no free user left to claim stays in `Init:CrashLoopBackOff`,
+  with the reason in `kubectl logs <pod> -c autologin`;
+- **the concurrent-client licence** (`GET /v1/license` → `license_count`) — every connected UI
+  session takes a seat too. Over the limit, the pod still reports `Running` but its log shows
+  `Websocket close: 1002` right after connecting. There are no probes to catch this, because the
+  client opens no port.
+
+See [client-autologin/README.md](client-autologin/README.md) for the full connect sequence.
 
 See [examples/values-linux-clients.yaml](examples/values-linux-clients.yaml) for a two-type setup.
 

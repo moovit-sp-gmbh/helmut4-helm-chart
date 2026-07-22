@@ -46,15 +46,31 @@ wss://localhost:8881/ws?token=Bearer%20<jwt>
   &userEndpoint=…&streamEndpoint=…&ioEndpoint=…
 ```
 
-The three `*Endpoint` values are exactly what we send, but the `wss://localhost:8881/ws` prefix
-is produced server-side and is not influenced by the request body — a file downloaded from the
-Users menu carries the same prefix, since the endpoint accepts only those three fields. The
-chart meanwhile routes `/v1/ws` to `users:8000`, and that endpoint is live.
+`localhost:8881` looks alarming but is correct: it is the client's *own* loopback socket. The
+client starts its own Tomcat on 8881 (https) and 8880 (http) and connects to itself first, then
+dials the real server derived from `userEndpoint`. Verified in-cluster — with
+`userEndpoint=http://users:8000/v1/members` the client logs:
 
-So the client appears to derive its socket from `userEndpoint` rather than using that literal
-host; a client on any machine other than the Helmut server could not connect otherwise. If a
-client pod starts but never appears as connected in the Users menu, this is the first thing to
-check — `kubectl logs <pod> -c client-<type>` will show the socket it actually dialled.
+```
+LoopbackWebsocketClient : Websocket connected to: wss://localhost:8881/ws?…
+HCWebsocketClient       : Websocket connected to: ws://users:8000/v1/ws?…&autologin=true
+```
+
+So in-cluster endpoints from `service-config` are the right thing to feed it; nothing has to be
+routed through the ingress.
+
+## When a client pod is Running but never connects
+
+The client does not exit when the server refuses it — the pod stays `Running` and, since there
+are no probes, nothing marks it unhealthy. Check `kubectl logs <pod> -c client-<type>`:
+
+- `Websocket close: 1002` right after `HCWebsocketClient : Websocket connected to:` means the
+  server rejected the session. The usual cause is the concurrent-client licence: `GET /v1/license`
+  reports `license_count`, and the users service logs `Connected: n / n (license)`. Every
+  connected UI session occupies a seat too, so `maxReplicas` is bounded by free licence seats,
+  not just by the size of the user pool.
+- No `HCWebsocketClient` line at all means the endpoints are wrong — check what the initContainer
+  wrote and what `service-config` contains.
 
 ## Development
 
