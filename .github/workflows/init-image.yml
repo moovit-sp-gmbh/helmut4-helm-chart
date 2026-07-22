@@ -26,8 +26,10 @@ jobs:
       - name: Offline checks
         run: sh client-autologin/test.sh
 
+      # From inside the directory, so -x can resolve the script test.sh sources.
       - name: Shellcheck
-        run: shellcheck -s sh client-autologin/claim-autologin.sh client-autologin/test.sh
+        working-directory: client-autologin
+        run: shellcheck -x -s sh claim-autologin.sh test.sh
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
