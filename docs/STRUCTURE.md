@@ -48,6 +48,7 @@ helmut4-helm-chart/
 ├── docs/                                 # Documentation
 │   ├── CSI-DRIVER.md                     # CSI driver configuration
 │   ├── HA-DATABASE.md                    # MongoDB/RabbitMQ HA setup
+│   ├── LINUX-CLIENTS.md                  # Linux render clients setup guide
 │   ├── QUICKSTART.md                     # Quick start guide
 │   ├── SECURITY.md                       # Security best practices
 │   ├── SSL_TROUBLESHOOTING.md            # TLS/SSL troubleshooting

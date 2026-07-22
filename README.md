@@ -332,8 +332,10 @@ them. Two separate limits bound `maxReplicas`:
 Autoscaling also interrupts work — Kubernetes chooses which pod to remove, and a client
 rendering at that moment is sent SIGTERM regardless. Leave it off for types running long jobs.
 
-A two-type setup is in [examples/values-linux-clients.yaml](examples/values-linux-clients.yaml);
-[client-autologin/README.md](client-autologin/README.md) documents the full connect sequence.
+**Full setup guide: [docs/LINUX-CLIENTS.md](docs/LINUX-CLIENTS.md)** — creating the user pool,
+storage layouts, autoscaling limits, how a pod claims its user, and troubleshooting. A worked
+two-type example is in [examples/values-linux-clients.yaml](examples/values-linux-clients.yaml),
+and [client-autologin/README.md](client-autologin/README.md) covers the init image itself.
 
 ## Ingress Routing
 
@@ -432,7 +434,8 @@ kubectl get httproute -n helmut4
 kubectl describe httproute -n helmut4 helmut4-route
 ```
 
-See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more details.
+See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more details, and
+[docs/LINUX-CLIENTS.md](docs/LINUX-CLIENTS.md#troubleshooting) for the Linux clients.
 
 ## Security
 
@@ -470,3 +473,4 @@ See [docs/SECURITY.md](docs/SECURITY.md) for more details.
 - [docs/HA-DATABASE.md](docs/HA-DATABASE.md) — MongoDB/RabbitMQ HA
 - [docs/STORAGE-MIGRATION.md](docs/STORAGE-MIGRATION.md) — Storage Migration
 - [docs/CSI-DRIVER.md](docs/CSI-DRIVER.md) — CSI Driver Configuration
+- [docs/LINUX-CLIENTS.md](docs/LINUX-CLIENTS.md) — Linux render clients: user pool, storage, autoscaling
