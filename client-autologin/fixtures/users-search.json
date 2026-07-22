@@ -1,0 +1,42 @@
+[
+  {
+    "id": "6603d6df04348000010262d1",
+    "username": "linux-render-01",
+    "displayname": "Linux Render 01",
+    "isConnected": true,
+    "isRenderNode": true,
+    "role": "USER",
+    "groups": [{ "id": "aaaa000000000000000000a1", "name": "render" }],
+    "products": [{ "id": "bbbb000000000000000000b1", "name": "IO" }]
+  },
+  {
+    "id": "6603d6df04348000010262d2",
+    "username": "linux-render-02",
+    "displayname": "Linux Render 02",
+    "isConnected": false,
+    "isRenderNode": true,
+    "role": "USER",
+    "groups": [{ "id": "aaaa000000000000000000a1", "name": "render" }],
+    "products": []
+  },
+  {
+    "id": "6603d6df04348000010262d3",
+    "username": "linux-render-03",
+    "displayname": "Linux Render 03",
+    "isConnected": false,
+    "isRenderNode": true,
+    "role": "USER",
+    "groups": [],
+    "products": []
+  },
+  {
+    "id": "6603d6df04348000010262d4",
+    "username": "linux-transcode-01",
+    "displayname": "Linux Transcode 01",
+    "isConnected": false,
+    "isRenderNode": true,
+    "role": "USER",
+    "groups": [],
+    "products": []
+  }
+]
