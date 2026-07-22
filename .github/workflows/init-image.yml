@@ -1,0 +1,60 @@
+name: Client autologin init image
+
+on:
+  push:
+    tags:
+      - 'client-autologin-v*'  # e.g. client-autologin-v0.1.0 -> :0.1.0
+  pull_request:
+    paths:
+      - 'client-autologin/**'
+      - '.github/workflows/init-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/helmut4-client-autologin
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Offline checks
+        run: sh client-autologin/test.sh
+
+      - name: Shellcheck
+        run: shellcheck -s sh client-autologin/claim-autologin.sh client-autologin/test.sh
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      # Tags only: pull requests build without credentials to keep the image honest.
+      - name: Log in to ghcr.io
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve tags
+        id: tags
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#client-autologin-v}"
+            echo "tags=${IMAGE}:${VERSION},${IMAGE}:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=${IMAGE}:ci" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./client-autologin
+          platforms: linux/amd64,linux/arm64
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
+          tags: ${{ steps.tags.outputs.tags }}
+          provenance: false
