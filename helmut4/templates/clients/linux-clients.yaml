@@ -1,0 +1,205 @@
+{{- if .Values.linuxClients.enabled }}
+{{- $root := . }}
+{{- $clients := .Values.linuxClients }}
+{{- range $type, $client := $clients.types }}
+{{- $name := printf "client-%s" $type }}
+{{- $scaling := merge (deepCopy ($client.autoscaling | default dict)) $clients.autoscaling }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ $root.Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" $root | nindent 4 }}
+    app: {{ $name }}
+spec:
+  {{- if not $scaling.enabled }}
+  replicas: {{ $client.replicas | default 1 }}
+  {{- end }}
+  # maxSurge 0: a rollout must not need more users than replicas — the old pod
+  # frees its seat before the new one tries to claim one.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $root | sha256sum }}
+        checksum/client-admin: {{ include (print $.Template.BasePath "/clients/secret.yaml") $root | sha256sum }}
+      labels:
+        app: {{ $name }}
+        {{- include "helmut4.labels" $root | nindent 8 }}
+    spec:
+      {{- if $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml $root.Values.global.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "helmut4.serviceAccountName" $root }}
+      automountServiceAccountToken: {{ $root.Values.global.automountServiceAccountToken | default false }}
+      # Renders the autologin emptyDir group-writable for the non-root initContainer.
+      # The client itself runs as root — the image expects /root.
+      securityContext:
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: {{ $clients.terminationGracePeriodSeconds }}
+      {{- if ($root.Values.topologySpread | default dict).enabled }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: {{ $name }}
+      {{- end }}
+      {{- with $client.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $client.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $client.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      initContainers:
+        # Claims a free user from this type's pool and writes its autologin file,
+        # so replicas stay interchangeable and the HPA can scale them.
+        - name: autologin
+          image: {{ $clients.initImage | quote }}
+          imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # MCC_USERS_URL / MCC_STREAM_URL / MCC_IO_URL come from here: the autologin
+          # endpoints then always match the deployed release.
+          envFrom:
+            - configMapRef:
+                name: service-config
+          env:
+            - name: USER_PREFIX
+              value: {{ required (printf "linuxClients.types.%s.userPrefix is required" $type) $client.userPrefix | quote }}
+            - name: ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helmut4.linuxClient.adminSecretName" $root }}
+                  key: username
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helmut4.linuxClient.adminSecretName" $root }}
+                  key: password
+            - name: CLAIM_RETRIES
+              value: {{ $clients.claimRetries | quote }}
+            - name: CLAIM_RETRY_DELAY
+              value: {{ $clients.claimRetryDelay | quote }}
+            - name: CLAIM_JITTER_SECONDS
+              value: {{ $clients.claimJitterSeconds | quote }}
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "64Mi"
+          volumeMounts:
+            - name: autologin
+              mountPath: /autologin
+
+      containers:
+        - name: {{ $name }}
+          image: "{{ $root.Values.global.registry }}/{{ $clients.image }}:{{ $client.tag | default $clients.tag }}"
+          imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          # No probes: the client opens no port (it pulls jobs over AMQP), so there
+          # is nothing to poll. The JVM is PID 1 — if it exits, the pod restarts.
+          resources:
+            {{- toYaml $client.resources | nindent 12 }}
+          volumeMounts:
+            # subPath so the rest of the image's HelmutClient directory survives.
+            - name: autologin
+              mountPath: "/root/MoovIT GmbH/HelmutClient/helmut.auto.login"
+              subPath: helmut.auto.login
+              readOnly: true
+            {{- if $client.appMounts }}
+            {{- range $root.Values.global.storage.volumes }}
+            {{- if .appMount }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- range $client.volumes }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+              {{- with .subPath }}
+              subPath: {{ . }}
+              {{- end }}
+              {{- if .readOnly }}
+              readOnly: true
+              {{- end }}
+            {{- end }}
+
+      volumes:
+        - name: autologin
+          emptyDir: {}
+        {{- if $client.appMounts }}
+        {{- range $root.Values.global.storage.volumes }}
+        {{- if .appMount }}
+        - name: {{ .name }}
+          persistentVolumeClaim:
+            claimName: {{ .name }}-pvc
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- range $client.volumes }}
+        - name: {{ .name }}
+          persistentVolumeClaim:
+            claimName: {{ .claimName }}
+        {{- end }}
+
+{{- if $scaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  namespace: {{ $root.Values.namespace }}
+  labels:
+    {{- include "helmut4.labels" $root | nindent 4 }}
+    app: {{ $name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ $scaling.minReplicas }}
+  maxReplicas: {{ $scaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $scaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}
+{{- end }}

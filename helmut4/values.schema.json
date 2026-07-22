@@ -53,6 +53,47 @@
         "volumeMounts": { "type": "boolean" },
         "runAsRoot": { "type": "boolean" }
       }
+    },
+    "linuxClientAutoscaling": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minReplicas": { "type": "integer", "minimum": 1 },
+        "maxReplicas": { "type": "integer", "minimum": 1 },
+        "targetCPUUtilizationPercentage": { "type": "integer", "minimum": 1, "maximum": 100 }
+      }
+    },
+    "linuxClientType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["userPrefix"],
+      "properties": {
+        "userPrefix": { "type": "string", "minLength": 1 },
+        "replicas": { "type": "integer", "minimum": 0 },
+        "tag": { "type": ["string", "number"], "minLength": 1 },
+        "appMounts": { "type": "boolean" },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "claimName", "mountPath"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "claimName": { "type": "string", "minLength": 1 },
+              "mountPath": { "type": "string", "minLength": 1 },
+              "subPath": { "type": "string" },
+              "readOnly": { "type": "boolean" }
+            }
+          }
+        },
+        "resources": { "$ref": "#/definitions/resources" },
+        "nodeSelector": { "type": "object", "additionalProperties": true },
+        "tolerations": { "type": "array", "items": { "type": "object" } },
+        "affinity": { "type": "object", "additionalProperties": true },
+        "autoscaling": { "$ref": "#/definitions/linuxClientAutoscaling" }
+      }
     }
   },
   "properties": {
@@ -281,6 +322,35 @@
       "type": "object",
       "description": "Per-microservice deployment settings. Every value follows the `service` shape.",
       "additionalProperties": { "$ref": "#/definitions/service" }
+    },
+    "linuxClients": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional Helmut4 Linux clients (mcp_hc). Each entry under `types` becomes its own Deployment.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "type": "string", "minLength": 1 },
+        "tag": { "type": ["string", "number"], "minLength": 1 },
+        "initImage": { "type": "string", "minLength": 1 },
+        "adminCredentials": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "existingSecret": { "type": "string" },
+            "username": { "type": "string" },
+            "password": { "type": "string" }
+          }
+        },
+        "claimRetries": { "type": "integer", "minimum": 1 },
+        "claimRetryDelay": { "type": "integer", "minimum": 0 },
+        "claimJitterSeconds": { "type": "integer", "minimum": 0 },
+        "terminationGracePeriodSeconds": { "type": "integer", "minimum": 0 },
+        "autoscaling": { "$ref": "#/definitions/linuxClientAutoscaling" },
+        "types": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/linuxClientType" }
+        }
+      }
     },
     "mongobackup": {
       "type": "object",

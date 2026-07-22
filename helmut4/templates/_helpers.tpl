@@ -99,6 +99,13 @@ RabbitMQ host (pod-0 of headless service, FQDN)
 {{- end }}
 
 {{/*
+Secret holding the Helmut admin credentials the Linux client initContainer uses
+*/}}
+{{- define "helmut4.linuxClient.adminSecretName" -}}
+{{- .Values.linuxClients.adminCredentials.existingSecret | default "helmut4-client-admin" }}
+{{- end }}
+
+{{/*
 MongoDB credentials secret name
 */}}
 {{- define "helmut4.mongodb.secretName" -}}
