@@ -19,6 +19,7 @@ A complete Helm chart for the Helmut4 microservices application — MongoDB repl
 - **Longhorn Block Storage**: MongoDB PVCs on Longhorn (50 Gi per replica)
 - **SMB / NFS CSI Driver Support**: multi-volume list for application file storage and any additional shares (e.g. backups)
 - **Private Registry Credentials**: Docker Registry authentication integrated
+- **Linux Clients** (optional, off by default): headless `mcp_hc` render nodes, several types side by side, each autoscalable — every pod claims its own render-node user on startup, so replicas are interchangeable (see [Linux clients](#linux-clients-optional))
 - **Fully Configurable**: All aspects manageable via `values.yaml`
 
 ## Prerequisites
@@ -29,6 +30,7 @@ A complete Helm chart for the Helmut4 microservices application — MongoDB repl
 - Longhorn installed (for MongoDB block storage)
 - SMB CSI Driver (for application storage via `/Volumes`)
 - cert-manager (optional, for automatic TLS via Let's Encrypt)
+- metrics-server (optional, only for autoscaling — the HPAs read CPU from it)
 
 ## Installation
 
@@ -383,6 +385,27 @@ kubectl delete namespace helmut4
 kubectl logs -n helmut4 <pod-name>
 kubectl describe pod -n helmut4 <pod-name>
 ```
+
+### Linux client not picking up jobs
+
+The client opens no port, so nothing probes it — a pod can sit `Running` while being refused.
+Check the two containers in order:
+
+```bash
+kubectl logs -n helmut4 <pod> -c autologin        # which user it claimed
+kubectl logs -n helmut4 <pod> -c client-<type>    # whether the socket stayed up
+```
+
+| Symptom | Cause |
+|---------|-------|
+| `Init:CrashLoopBackOff`, `no free user for prefix … pool exhausted` | every user matching `userPrefix` is already connected — add users or lower `maxReplicas` |
+| `Init:` error on the login call | wrong `adminCredentials`, or the users service is not up yet (the pod retries) |
+| `Running`, log shows `Websocket close: 1002` after connecting | concurrent-client licence exhausted — `GET /v1/license` reports `license_count`, and every UI session takes a seat too |
+| `Running`, no `HCWebsocketClient` line at all | endpoints wrong — check `service-config` and what the initContainer wrote |
+| HPA stuck at `<unknown>` targets | no CPU request on the client container, or `metrics-server` is missing |
+
+`wss://localhost:8881` in the client log is normal — that is the client's own loopback socket,
+not the server.
 
 ### MongoDB replica set status
 
