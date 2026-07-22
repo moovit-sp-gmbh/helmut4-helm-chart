@@ -32,14 +32,21 @@ jobs:
       - name: Resolve previous tag
         id: prev_tag
         run: |
-          PREV=$(git tag --sort=-creatordate | grep -vFx "${GITHUB_REF_NAME}" | head -n1)
+          # Nearest tag by ancestry, not by date: a tag created later on an
+          # unrelated line (the init image's, say) is not this chart's predecessor.
+          PREV=$(git describe --tags --abbrev=0 \
+                   --exclude='client-autologin-v*' \
+                   "${GITHUB_REF_NAME}^" 2>/dev/null || true)
           echo "prev=${PREV}" >> "$GITHUB_OUTPUT"
+          echo "Previous chart tag: ${PREV:-<none>}"
 
       - name: Build release notes from commits
         id: notes
         run: |
           TAG="${GITHUB_REF_NAME}"
           PREV="${{ steps.prev_tag.outputs.prev }}"
+          CHART_VERSION=$(grep '^version:' helmut4/Chart.yaml | awk '{print $2}')
+          APP_VERSION=$(grep '^appVersion:' helmut4/Chart.yaml | awk '{print $2}' | tr -d '"')
 
           if [ -n "$PREV" ]; then
             RANGE="${PREV}..${TAG}"
@@ -49,19 +56,39 @@ jobs:
 
           NOTES=$(git log "$RANGE" --pretty=format:"- %s (%h)" --no-merges)
 
-          # Group by conventional commit prefix
-          FEATURES=$(echo "$NOTES" | grep -E '^- feat' || true)
-          FIXES=$(echo "$NOTES"    | grep -E '^- fix'  || true)
-          OTHER=$(echo "$NOTES"    | grep -vE '^- feat|^- fix' || true)
+          # Group by conventional commit type. Anything with a `!` marker or a
+          # BREAKING CHANGE footer is called out first.
+          BREAKING=$(git log "$RANGE" --no-merges \
+                       --pretty=format:"- %s (%h)%n%b" \
+                     | grep -E '^- [a-z]+(\([^)]*\))?!:|BREAKING CHANGE' || true)
+          FEATURES=$(echo "$NOTES" | grep -E '^- feat'                  || true)
+          FIXES=$(echo "$NOTES"    | grep -E '^- (fix|perf)'            || true)
+          DOCS=$(echo "$NOTES"     | grep -E '^- docs'                  || true)
+          MAINT=$(echo "$NOTES"    | grep -E '^- (ci|build|chore|refactor|style|test|revert)' || true)
+          OTHER=$(echo "$NOTES"    | grep -vE '^- (feat|fix|perf|docs|ci|build|chore|refactor|style|test|revert)' || true)
 
-          BODY=""
+          BODY="Chart \`${CHART_VERSION}\` · Helmut4 \`${APP_VERSION}\`\n\n"
+          BODY="${BODY}\`\`\`bash\nhelm repo add helmut4 https://moovit-sp-gmbh.github.io/helmut4-helm-chart\nhelm upgrade helmut4 helmut4/helmut4 --install -n helmut4 --version ${CHART_VERSION}\n\`\`\`\n\n"
+
+          # A commit list says what was touched, not what the release does. Drop a
+          # prose summary at .github/release-notes/<tag>.md and it leads the notes.
+          if [ -f ".github/release-notes/${TAG}.md" ]; then
+            BODY="${BODY}$(sed 's/\\/\\\\/g' ".github/release-notes/${TAG}.md")\n\n---\n\n"
+          fi
+
+          [ -n "$BREAKING" ] && BODY="${BODY}## ⚠️ Breaking Changes\n${BREAKING}\n\n"
           [ -n "$FEATURES" ] && BODY="${BODY}## ✨ Features\n${FEATURES}\n\n"
-          [ -n "$FIXES"    ] && BODY="${BODY}## 🐛 Bug Fixes\n${FIXES}\n\n"
-          [ -n "$OTHER"    ] && BODY="${BODY}## 🔧 Other Changes\n${OTHER}\n\n"
+          [ -n "$FIXES"    ] && BODY="${BODY}## 🐛 Fixes & Performance\n${FIXES}\n\n"
+          [ -n "$DOCS"     ] && BODY="${BODY}## 📚 Documentation\n${DOCS}\n\n"
+          [ -n "$MAINT"    ] && BODY="${BODY}## 🔧 Maintenance\n${MAINT}\n\n"
+          [ -n "$OTHER"    ] && BODY="${BODY}## Other Changes\n${OTHER}\n\n"
 
-          [ -z "$BODY" ] && BODY="No changes recorded."
+          if [ -n "$PREV" ]; then
+            BODY="${BODY}**Full diff**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV}...${TAG}\n"
+          fi
 
           printf "%b" "$BODY" > /tmp/release_notes.md
+          cat /tmp/release_notes.md
           echo "notes_file=/tmp/release_notes.md" >> "$GITHUB_OUTPUT"
 
       - name: Detect prerelease
