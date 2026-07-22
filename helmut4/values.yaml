@@ -837,9 +837,26 @@ linuxClients:
   # default so a running render is not cut off mid-job.
   terminationGracePeriodSeconds: 300
 
+  # -- Default resources for every type; override per type. Mirrors the limits
+  # the upstream compose file uses (4 CPU / 2500M). The CPU *request* is what
+  # HPA measures utilization against — a client without one never scales.
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "4"
+      memory: "2500Mi"
+
   # -- Default HPA settings for every type; override per type. Requires
   # `metrics-server`. Keep `maxReplicas` at or below the size of that type's
-  # user pool — extra pods have no free user left to claim.
+  # user pool *and* the free concurrent-client licence seats — extra pods have
+  # nothing left to claim.
+  #
+  # Scaling down interrupts work: Kubernetes picks the victim pod, and a client
+  # rendering at that moment is sent SIGTERM regardless. Only
+  # `terminationGracePeriodSeconds` stands between it and SIGKILL, so leave
+  # autoscaling off for types running long jobs.
   autoscaling:
     # -- Render an HPA per type.
     enabled: false
@@ -854,8 +871,10 @@ linuxClients:
   # Empty by default; see `examples/values-linux-clients.yaml` for a worked
   # setup. Per-type keys:
   #
-  # - `userPrefix` (required): pods claim the first free user whose name starts
-  #   with this, e.g. `linux-render-` matching `linux-render-01`…`-08`.
+  # - `userPrefix` (required): pods claim a free user whose name starts with
+  #   this, e.g. `linux-render-` matching `linux-render-01`…`-08`. No prefix may
+  #   be a prefix of another, or the two types will claim from each other's pool.
+  #   Goes into a URL path, so keep it to `A-Za-z0-9._~-` (enforced by the schema).
   # - `replicas`: static replica count. Ignored once autoscaling is on.
   # - `tag`: image tag override.
   # - `appMounts`: also mount every `global.storage.volumes` entry that has

@@ -69,7 +69,7 @@
       "additionalProperties": false,
       "required": ["userPrefix"],
       "properties": {
-        "userPrefix": { "type": "string", "minLength": 1 },
+        "userPrefix": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9._~-]+$" },
         "replicas": { "type": "integer", "minimum": 0 },
         "tag": { "type": ["string", "number"], "minLength": 1 },
         "appMounts": { "type": "boolean" },
@@ -345,6 +345,7 @@
         "claimRetryDelay": { "type": "integer", "minimum": 0 },
         "claimJitterSeconds": { "type": "integer", "minimum": 0 },
         "terminationGracePeriodSeconds": { "type": "integer", "minimum": 0 },
+        "resources": { "$ref": "#/definitions/resources" },
         "autoscaling": { "$ref": "#/definitions/linuxClientAutoscaling" },
         "types": {
           "type": "object",

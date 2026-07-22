@@ -2,8 +2,17 @@
 {{- $root := . }}
 {{- $clients := .Values.linuxClients }}
 {{- range $type, $client := $clients.types }}
-{{- $name := printf "client-%s" $type }}
-{{- $scaling := merge (deepCopy ($client.autoscaling | default dict)) $clients.autoscaling }}
+{{- $name := printf "client-%s" $type | trunc 63 | trimSuffix "-" }}
+{{- $resources := $client.resources | default $clients.resources }}
+{{- /* Resolved key by key, not with `merge`: mergo treats false as unset, so a type
+       setting `enabled: false` would silently inherit the global `true`. */}}
+{{- $g := $clients.autoscaling }}
+{{- $t := $client.autoscaling | default dict }}
+{{- $scaling := dict
+      "enabled"                        (ternary $t.enabled $g.enabled (hasKey $t "enabled"))
+      "minReplicas"                    (ternary $t.minReplicas $g.minReplicas (hasKey $t "minReplicas"))
+      "maxReplicas"                    (ternary $t.maxReplicas $g.maxReplicas (hasKey $t "maxReplicas"))
+      "targetCPUUtilizationPercentage" (ternary $t.targetCPUUtilizationPercentage $g.targetCPUUtilizationPercentage (hasKey $t "targetCPUUtilizationPercentage")) }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -131,8 +140,10 @@ spec:
               drop: ["ALL"]
           # No probes: the client opens no port (it pulls jobs over AMQP), so there
           # is nothing to poll. The JVM is PID 1 — if it exits, the pod restarts.
+          # CPU requests are not optional here: HPA targets CPU utilization, which is
+          # a percentage of the request. Without one the HPA reports <unknown> forever.
           resources:
-            {{- toYaml $client.resources | nindent 12 }}
+            {{- toYaml $resources | nindent 12 }}
           volumeMounts:
             # subPath so the rest of the image's HelmutClient directory survives.
             - name: autologin
@@ -160,7 +171,8 @@ spec:
 
       volumes:
         - name: autologin
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 1Mi
         {{- if $client.appMounts }}
         {{- range $root.Values.global.storage.volumes }}
         {{- if .appMount }}
