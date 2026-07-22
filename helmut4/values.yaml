@@ -833,9 +833,31 @@ linuxClients:
   # instead of racing onto the same free user.
   claimJitterSeconds: 15
 
-  # -- Grace period for a client pod on scale-down or drain. Generous by
-  # default so a running render is not cut off mid-job.
+  # -- Baseline grace period for a client pod. Raised automatically to
+  # `gracefulShutdown.maxWaitSeconds + 30` when the drain hook is on, so the
+  # kubelet can never SIGKILL a pod that is still draining.
   terminationGracePeriodSeconds: 300
+
+  # -- Hold SIGTERM until the client stops working. Scale-down, node drain and
+  # rollouts all delete pods, and nothing tells the client that a render is
+  # about to be cut short — so a preStop hook watches the container's own CPU
+  # and blocks while it is busy. This is what makes autoscaling safe here.
+  #
+  # CPU is read from the container's cgroup, not from `top`: the client image
+  # is busybox-based (its `top` has no `Cpu(s)` line) and `/proc` would report
+  # the node's load rather than this pod's.
+  gracefulShutdown:
+    # -- Wait for the client to go idle before letting it terminate.
+    enabled: true
+    # -- Below this, the client counts as idle. An idle client sits near zero;
+    # one that is rendering draws hundreds to thousands of millicores.
+    cpuThresholdMillicores: 200
+    # -- Seconds per measurement window. Also the granularity of the wait.
+    pollSeconds: 10
+    # -- Hard cap on the wait. Past this the pod terminates anyway, so a wedged
+    # client cannot block a drain forever. Rollouts serialise on this: with
+    # `maxSurge: 0`, each pod may take up to this long to be replaced.
+    maxWaitSeconds: 3600
 
   # -- Default resources for every type; override per type. Mirrors the limits
   # the upstream compose file uses (4 CPU / 2500M). The CPU *request* is what
@@ -853,10 +875,9 @@ linuxClients:
   # user pool *and* the free concurrent-client licence seats — extra pods have
   # nothing left to claim.
   #
-  # Scaling down interrupts work: Kubernetes picks the victim pod, and a client
-  # rendering at that moment is sent SIGTERM regardless. Only
-  # `terminationGracePeriodSeconds` stands between it and SIGKILL, so leave
-  # autoscaling off for types running long jobs.
+  # Scaling down is safe for running jobs: `gracefulShutdown` below holds
+  # SIGTERM until the victim pod goes idle. The cost is that a scale-down or a
+  # rollout can take as long as the job still running on that pod.
   autoscaling:
     # -- Render an HPA per type.
     enabled: false

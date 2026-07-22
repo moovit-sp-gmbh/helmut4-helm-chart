@@ -345,6 +345,16 @@
         "claimRetryDelay": { "type": "integer", "minimum": 0 },
         "claimJitterSeconds": { "type": "integer", "minimum": 0 },
         "terminationGracePeriodSeconds": { "type": "integer", "minimum": 0 },
+        "gracefulShutdown": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "cpuThresholdMillicores": { "type": "integer", "minimum": 1 },
+            "pollSeconds": { "type": "integer", "minimum": 1 },
+            "maxWaitSeconds": { "type": "integer", "minimum": 1 }
+          }
+        },
         "resources": { "$ref": "#/definitions/resources" },
         "autoscaling": { "$ref": "#/definitions/linuxClientAutoscaling" },
         "types": {

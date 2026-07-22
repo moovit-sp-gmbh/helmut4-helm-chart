@@ -51,13 +51,20 @@ spec:
       {{- end }}
       serviceAccountName: {{ include "helmut4.serviceAccountName" $root }}
       automountServiceAccountToken: {{ $root.Values.global.automountServiceAccountToken | default false }}
+      {{- /* The grace period must outlast the preStop drain, or the kubelet SIGKILLs
+             mid-job and the whole hook was pointless. Derived, never hand-tuned. */}}
+      {{- $drain := $clients.gracefulShutdown }}
+      {{- $grace := $clients.terminationGracePeriodSeconds }}
+      {{- if $drain.enabled }}
+      {{- $grace = max $grace (add $drain.maxWaitSeconds 30) }}
+      {{- end }}
       # Renders the autologin emptyDir group-writable for the non-root initContainer.
       # The client itself runs as root — the image expects /root.
       securityContext:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
-      terminationGracePeriodSeconds: {{ $clients.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ $grace }}
       {{- if ($root.Values.topologySpread | default dict).enabled }}
       topologySpreadConstraints:
         - maxSkew: 1
@@ -140,6 +147,46 @@ spec:
               drop: ["ALL"]
           # No probes: the client opens no port (it pulls jobs over AMQP), so there
           # is nothing to poll. The JVM is PID 1 — if it exits, the pod restarts.
+          {{- if $drain.enabled }}
+          # Scale-down, drain and rollout all delete pods, and the client has no idea
+          # a render is about to be cut short. Hold SIGTERM until its own CPU goes
+          # quiet. Measured from the container's cgroup, not `top`: the image is
+          # busybox, whose top has no "Cpu(s)" line, and /proc CPU is the node's.
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    threshold={{ $drain.cpuThresholdMillicores }}
+                    poll={{ $drain.pollSeconds }}
+                    deadline=$(( $(date +%s) + {{ $drain.maxWaitSeconds }} ))
+
+                    usage() {
+                      if [ -r /sys/fs/cgroup/cpu.stat ]; then
+                        awk '/^usage_usec/ { print $2 }' /sys/fs/cgroup/cpu.stat
+                      elif [ -r /sys/fs/cgroup/cpuacct/cpuacct.usage ]; then
+                        awk '{ print int($1 / 1000) }' /sys/fs/cgroup/cpuacct/cpuacct.usage
+                      fi
+                    }
+
+                    if [ -z "$(usage)" ]; then
+                      echo "prestop: no cgroup cpu accounting, shutting down now" >&2
+                      exit 0
+                    fi
+
+                    while [ "$(date +%s)" -lt "$deadline" ]; do
+                      before=$(usage); sleep "$poll"; after=$(usage)
+                      mc=$(( (after - before) / (poll * 1000) ))
+                      if [ "$mc" -lt "$threshold" ]; then
+                        echo "prestop: ${mc}m < ${threshold}m, idle - shutting down" >&2
+                        exit 0
+                      fi
+                      echo "prestop: ${mc}m busy, holding" >&2
+                    done
+                    echo "prestop: still busy after {{ $drain.maxWaitSeconds }}s, giving up" >&2
+          {{- end }}
           # CPU requests are not optional here: HPA targets CPU utilization, which is
           # a percentage of the request. Without one the HPA reports <unknown> forever.
           resources:

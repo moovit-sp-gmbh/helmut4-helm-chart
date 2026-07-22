@@ -144,15 +144,64 @@ Three things to know before turning it on:
 - **`maxReplicas` is bounded twice** — by the number of users matching the prefix, and by free
   licence seats. A pod that cannot claim a user fails its init and crash-loops; a pod that
   claims one but exceeds the licence stays `Running` while the server refuses it.
-- **Scale-down interrupts work.** Kubernetes chooses the victim; a client rendering at that
-  moment is sent SIGTERM regardless. `terminationGracePeriodSeconds` (default 300) is all that
-  stands between it and SIGKILL. For long jobs, leave autoscaling off and size the Deployment.
+- **Scale-down waits for the job** — see [Graceful shutdown](#graceful-shutdown) below. Without
+  it, Kubernetes would pick a victim and SIGTERM it mid-render.
 - **CPU requests are mandatory.** HPA measures utilization as a percentage of the request.
   `linuxClients.resources` provides a default so this cannot be forgotten; if you override
   `resources` per type, keep a CPU request in it.
 
 Rollouts use `maxSurge: 0` deliberately, so an upgrade never needs more users than replicas —
 the old pod releases its user before the replacement claims one.
+
+## Graceful shutdown
+
+Nothing tells the client that its pod is about to go away. Scale-down, `kubectl drain` and
+rollouts all delete pods, and a client rendering at that moment would simply be killed.
+
+So every pod carries a `preStop` hook that blocks termination while the client is busy:
+
+```yaml
+linuxClients:
+  gracefulShutdown:
+    enabled: true                   # on by default
+    cpuThresholdMillicores: 200     # below this the client counts as idle
+    pollSeconds: 10                 # measurement window
+    maxWaitSeconds: 3600            # hard cap, so a wedged client can't block a drain
+```
+
+The hook samples the container's **own** cgroup CPU (`/sys/fs/cgroup/cpu.stat`) twice,
+`pollSeconds` apart, and converts the delta to millicores. An idle client sits near zero; one
+rendering draws hundreds to thousands. It exits — allowing the shutdown — as soon as the
+measurement falls below the threshold, or when `maxWaitSeconds` runs out.
+
+Two things this deliberately does *not* do:
+
+- **It does not use `top`.** The client image is Alpine/busybox, whose `top` has no `Cpu(s)`
+  line, so the common `top -bn1 | grep "Cpu(s)"` recipe yields garbage there and the loop would
+  never exit early. It also reports the *node's* CPU, not the pod's.
+- **It does not read `/proc/stat`.** Same problem: that is the node, not this container.
+
+`terminationGracePeriodSeconds` is raised automatically to `maxWaitSeconds + 30` whenever it
+would otherwise be smaller. This is the failure mode worth knowing about: if the grace period is
+shorter than the hook's maximum wait, the kubelet SIGKILLs the pod mid-drain and the hook
+achieves nothing. Deriving it removes that trap.
+
+What it costs you:
+
+- a pod can sit in `Terminating` for as long as its current job — that is the point, but it does
+  make `kubectl drain` slow on a busy node;
+- rollouts serialise on it. With `maxSurge: 0`, replacing N replicas can take N × the job length.
+  Roll out when the fleet is quiet, or accept the wait.
+
+To see it working, `kubectl logs <pod> -c client-<type>` during termination:
+
+```
+prestop: 1035m busy, holding
+prestop: 12m < 200m, idle - shutting down
+```
+
+Turn it off with `gracefulShutdown.enabled: false` — pods then terminate immediately on
+`terminationGracePeriodSeconds`, killing whatever is running.
 
 ## How a pod claims its user
 

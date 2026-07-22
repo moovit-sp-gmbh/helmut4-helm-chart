@@ -329,8 +329,10 @@ them. Two separate limits bound `maxReplicas`:
   `Websocket close: 1002` right after connecting. There are no probes to catch this, because the
   client opens no port.
 
-Autoscaling also interrupts work — Kubernetes chooses which pod to remove, and a client
-rendering at that moment is sent SIGTERM regardless. Leave it off for types running long jobs.
+Scale-down does not interrupt work: every pod carries a `preStop` hook that watches its own
+cgroup CPU and holds SIGTERM until the client goes idle (default: under 200m, capped at one
+hour). The grace period is raised to match automatically, so the kubelet cannot SIGKILL a pod
+mid-render. The same protection covers node drains and rollouts.
 
 **Full setup guide: [docs/LINUX-CLIENTS.md](docs/LINUX-CLIENTS.md)** — creating the user pool,
 storage layouts, autoscaling limits, how a pod claims its user, and troubleshooting. A worked
@@ -405,6 +407,7 @@ kubectl logs -n helmut4 <pod> -c client-<type>    # whether the socket stayed up
 | `Running`, log shows `Websocket close: 1002` after connecting | concurrent-client licence exhausted — `GET /v1/license` reports `license_count`, and every UI session takes a seat too |
 | `Running`, no `HCWebsocketClient` line at all | endpoints wrong — check `service-config` and what the initContainer wrote |
 | HPA stuck at `<unknown>` targets | no CPU request on the client container, or `metrics-server` is missing |
+| Pod stuck `Terminating` for a long time | expected — the drain hook is holding while the client is busy. `kubectl logs <pod> -c client-<type>` shows `prestop: …m busy, holding` |
 
 `wss://localhost:8881` in the client log is normal — that is the client's own loopback socket,
 not the server.
