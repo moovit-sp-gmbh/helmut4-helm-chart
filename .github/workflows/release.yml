@@ -54,7 +54,9 @@ jobs:
             RANGE="${TAG}"
           fi
 
-          NOTES=$(git log "$RANGE" --pretty=format:"- %s (%h)" --no-merges)
+          # `chore(release): x.y.z` is bookkeeping — nobody wants it in x.y.z's notes.
+          NOTES=$(git log "$RANGE" --pretty=format:"- %s (%h)" --no-merges \
+                  | grep -vE '^- chore\(release\)' || true)
 
           # Group by conventional commit type. Anything with a `!` marker or a
           # BREAKING CHANGE footer is called out first.
