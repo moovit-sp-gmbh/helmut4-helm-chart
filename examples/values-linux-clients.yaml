@@ -1,0 +1,80 @@
+# Two flavours of Linux render client, autoscaled.
+#
+# Prerequisite: the render-node users must already exist in Helmut (Users menu,
+# "Render Node" enabled). They consume licensed seats, so the chart does not create
+# them. Keep each type's maxReplicas at or below the size of its pool:
+#
+#   linux-render-01 … linux-render-08       -> render,    maxReplicas 8
+#   linux-transcode-01 … linux-transcode-04 -> transcode,  maxReplicas 4
+#
+# helm upgrade --install helmut4 ./helmut4 -f examples/values-linux-clients.yaml
+
+global:
+  storage:
+    volumes:
+      - name: helmut-storage
+        mountPath: "/Volumes/Helmut"
+        size: "100Gi"
+        source: ""
+        appMount: true
+      # Proxy renders live on their own share; only the transcode clients see it.
+      - name: proxies
+        mountPath: "/Volumes/Proxies"
+        size: "500Gi"
+        source: ""
+        appMount: false
+
+linuxClients:
+  enabled: true
+
+  adminCredentials:
+    # Better: create the Secret out of band and reference it here.
+    #   kubectl -n helmut4 create secret generic helmut4-client-admin \
+    #     --from-literal=username=admin --from-literal=password=...
+    existingSecret: ""
+    username: "admin"
+    password: "changeme"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    targetCPUUtilizationPercentage: 70
+
+  types:
+    # Full-fat render nodes on the shared Helmut share.
+    render:
+      userPrefix: "linux-render-"
+      appMounts: true
+      resources:
+        requests:
+          cpu: "1"
+          memory: "2Gi"
+        limits:
+          cpu: "4"
+          memory: "2500Mi"
+      autoscaling:
+        maxReplicas: 8
+
+    # Transcode nodes: same image, extra proxy share, smaller pool.
+    transcode:
+      userPrefix: "linux-transcode-"
+      appMounts: true
+      volumes:
+        - name: proxies
+          claimName: proxies-pvc
+          mountPath: "/Volumes/Proxies"
+      resources:
+        requests:
+          cpu: "2"
+          memory: "2Gi"
+        limits:
+          cpu: "8"
+          memory: "4Gi"
+      autoscaling:
+        maxReplicas: 4
+      nodeSelector:
+        node-role.kubernetes.io/transcode: "true"
+      tolerations:
+        - key: "transcode"
+          operator: "Exists"
+          effect: "NoSchedule"

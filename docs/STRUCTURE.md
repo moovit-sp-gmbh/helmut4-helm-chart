@@ -10,7 +10,6 @@ helmut4-helm-chart/
 │   │   └── rabbitmq-0.7.10.tgz           # cloudpirates/rabbitmq sub-chart
 │   └── templates/
 │       ├── _helpers.tpl                  # Helm helpers (mongodb.host, rabbitmq.host)
-│       ├── _service-deployment.tpl       # Generic deployment template
 │       ├── rbac.yaml                     # ServiceAccount, Role, RoleBinding
 │       ├── secrets.yaml                  # Docker registry + mongodb-credentials
 │       ├── configmap.yaml                # service-config ConfigMap (Spring Boot env vars)
@@ -19,6 +18,9 @@ helmut4-helm-chart/
 │       │   └── httproute.yaml            # gateway.networking.k8s.io/v1 HTTPRoute (opt-in)
 │       ├── services/
 │       │   └── deployments.yaml          # All 16 microservice deployments
+│       ├── clients/
+│       │   ├── linux-clients.yaml        # Optional mcp_hc render nodes (+ HPA per type)
+│       │   └── secret.yaml               # Admin credentials for the autologin initContainer
 │       ├── infrastructure/
 │       │   └── brokers/                  # (RabbitMQ via sub-chart)
 │       └── storage/
@@ -33,7 +35,14 @@ helmut4-helm-chart/
 │   ├── values-aws-csi.yaml               # AWS EBS CSI Driver
 │   ├── values-azure-csi.yaml             # Azure Disk CSI Driver
 │   ├── values-migration-pv-names.yaml    # Migration using PV names
-│   └── values-migration-pv-labels.yaml   # Migration using PV labels
+│   ├── values-migration-pv-labels.yaml   # Migration using PV labels
+│   └── values-linux-clients.yaml         # Autoscaled Linux render clients
+│
+├── client-autologin/                     # Init image: claims a render-node user
+│   ├── Dockerfile                        # alpine + curl + jq
+│   ├── claim-autologin.sh                # Login, find a free user, generate its autologin
+│   ├── test.sh                           # Offline checks (no network)
+│   └── fixtures/                         # Sample API responses for test.sh
 │
 ├── docs/                                 # Documentation
 │   ├── CSI-DRIVER.md                     # CSI driver configuration
