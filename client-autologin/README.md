@@ -29,9 +29,9 @@ log, which is the licensed-seat limit surfacing rather than a bug.
 | `MCC_USERS_URL`, `MCC_STREAM_URL`, `MCC_IO_URL` | `service-config` ConfigMap (`envFrom`) | — |
 | `USER_PREFIX` | `linuxClients.types.<type>.userPrefix` | — |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | `linuxClients.adminCredentials` Secret | — |
-| `AUTOLOGIN_PATH` | chart | `/autologin/helmut.auto.login` |
+| `AUTOLOGIN_PATH` | not set by the chart — the emptyDir is mounted at `/autologin` | `/autologin/helmut.auto.login` |
 | `CLAIM_RETRIES` | `linuxClients.claimRetries` | `10` |
-| `CLAIM_RETRY_DELAY` | chart | `10` |
+| `CLAIM_RETRY_DELAY` | `linuxClients.claimRetryDelay` | `10` |
 | `CLAIM_JITTER_SECONDS` | `linuxClients.claimJitterSeconds` | `15` |
 
 The three endpoint URLs are read straight from the ConfigMap the chart already renders, so the

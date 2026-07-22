@@ -42,7 +42,8 @@ helmut4-helm-chart/
 │   ├── Dockerfile                        # alpine + curl + jq
 │   ├── claim-autologin.sh                # Login, find a free user, generate its autologin
 │   ├── test.sh                           # Offline checks (no network)
-│   └── fixtures/                         # Sample API responses for test.sh
+│   ├── fixtures/                         # Sample API responses for test.sh
+│   └── README.md                         # Env contract + connect sequence
 │
 ├── docs/                                 # Documentation
 │   ├── CSI-DRIVER.md                     # CSI driver configuration
@@ -102,6 +103,13 @@ helmut4-helm-chart/
 
 ### 6. RBAC (namespace-scoped)
 - ServiceAccount, Role, RoleBinding (no ClusterRole)
+
+### 7. Linux clients (optional, off by default)
+- One Deployment per `linuxClients.types` entry — own mounts, sizing and user pool
+- Per-type HPA on CPU; `maxSurge: 0` so a rollout never needs more users than replicas
+- An initContainer claims a free render-node user and generates its autologin file,
+  which is what makes the replicas interchangeable (see `client-autologin/`)
+- No probes or Service: the client opens no port, it pulls jobs over AMQP
 
 ## Ingress Routes
 

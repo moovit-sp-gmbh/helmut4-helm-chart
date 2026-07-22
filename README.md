@@ -303,8 +303,10 @@ file. Pods therefore stay interchangeable and an HPA can scale them.
 ```yaml
 linuxClients:
   enabled: true
+  # kubectl -n helmut4 create secret generic helmut-client-admin \
+  #   --from-literal=username=admin --from-literal=password=...
   adminCredentials:
-    existingSecret: "helmut4-client-admin"   # keys: username / password
+    existingSecret: "helmut-client-admin"    # keys: username / password
   autoscaling:
     enabled: true
   types:
@@ -325,9 +327,11 @@ them. Two separate limits bound `maxReplicas`:
   `Websocket close: 1002` right after connecting. There are no probes to catch this, because the
   client opens no port.
 
-See [client-autologin/README.md](client-autologin/README.md) for the full connect sequence.
+Autoscaling also interrupts work — Kubernetes chooses which pod to remove, and a client
+rendering at that moment is sent SIGTERM regardless. Leave it off for types running long jobs.
 
-See [examples/values-linux-clients.yaml](examples/values-linux-clients.yaml) for a two-type setup.
+A two-type setup is in [examples/values-linux-clients.yaml](examples/values-linux-clients.yaml);
+[client-autologin/README.md](client-autologin/README.md) documents the full connect sequence.
 
 ## Ingress Routing
 
