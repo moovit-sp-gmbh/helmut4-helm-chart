@@ -286,8 +286,9 @@ mongodb:
   auth:
     # -- MongoDB root username.
     rootUsername: "root"
-    # -- MongoDB root password. Replace before exposing the service.
-    rootPassword: "***REMOVED***"
+    # -- MongoDB root password. No default; set it in your gitignored
+    # secrets file (see install-values.yaml) or point at `existingSecret`.
+    rootPassword: ""
     # -- Reuse an existing Secret instead of letting the chart create one.
     # When set, no `mongodb-credentials` Secret is rendered – the subchart
     # already creates a Secret named after `fullnameOverride` with key
@@ -306,8 +307,9 @@ mongodb:
     enabled: true
     # -- Replica set name.
     name: "rs0"
-    # -- Replica set keyfile contents (base64). Replace before exposing.
-    key: "***REMOVED***="
+    # -- Replica set keyfile contents (base64). No default; set it in your
+    # gitignored secrets file. Generate with `openssl rand -base64 32`.
+    key: ""
 
   # -- Persistent storage for MongoDB data. Use a block-storage class (e.g.
   # Longhorn) – NOT the SMB share. SMB is a file-share and causes problems
@@ -398,11 +400,12 @@ rabbitmq:
     # store in MongoDB). This value only needs to match what the chart
     # injects via `SPRING_RABBITMQ_USERNAME`.
     username: "root"
-    # -- RabbitMQ password for the internal `username` user. Replace
-    # before exposing the service.
-    password: "***REMOVED***"
-    # -- Erlang cookie used by the cluster nodes. Replace before exposing.
-    erlangCookie: "***REMOVED***"
+    # -- RabbitMQ password for the internal `username` user. No default;
+    # set it in your gitignored secrets file.
+    password: ""
+    # -- Erlang cookie shared by the cluster nodes. No default; set it in
+    # your gitignored secrets file. Generate with `openssl rand -hex 32`.
+    erlangCookie: ""
     # -- Key inside the existing Secret that holds the Erlang cookie.
     existingErlangCookieKey: "erlang-cookie"
     # -- Key inside the existing Secret that holds the password.

@@ -65,8 +65,11 @@ cd helmut4-helm-chart
 
 #### 2. Create `install-values.yaml`
 
-`install-values.yaml` is **gitignored** (it holds real credentials). Copy one of the
-examples as a starting point and edit it for your environment:
+`install-values.yaml` is **gitignored** (it holds real credentials). The chart ships
+**no** default passwords: `mongodb.auth.rootPassword`, `mongodb.replicaSet.key`,
+`rabbitmq.auth.password` and `rabbitmq.auth.erlangCookie` are empty in
+`helmut4/values.yaml`, and rendering fails with a named error until you set them
+here. Copy one of the examples as a starting point and edit it for your environment:
 
 ```bash
 cp examples/values-production.yaml install-values.yaml
@@ -91,12 +94,14 @@ mongodb:
   auth:
     rootUsername: "root"
     rootPassword: "your-secure-password"
+  replicaSet:
+    key: "your-base64-keyfile"        # openssl rand -base64 32
 
 rabbitmq:
   auth:
     username: "root"
     password: "your-secure-password"
-    erlangCookie: "your-erlang-cookie"
+    erlangCookie: "your-erlang-cookie" # openssl rand -hex 32
 
 credentials:
   storage:
@@ -150,6 +155,7 @@ mongodb:
   replicaSet:
     enabled: true
     name: "rs0"
+    key: "your-base64-keyfile"        # openssl rand -base64 32
 ```
 
 > **Note**: In RS mode the cloudpirates chart only creates the headless service `mongodb-headless`.
@@ -162,7 +168,7 @@ rabbitmq:
   auth:
     username: "root"
     password: "your-secure-password"
-    erlangCookie: "***REMOVED***"
+    erlangCookie: "your-erlang-cookie" # openssl rand -hex 32
 ```
 
 ### Ingress & TLS
@@ -444,8 +450,10 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more details, and
 
 - `install-values.yaml` is gitignored — keep all real credentials there. Use the
   files in `examples/` as templates (they contain `CHANGE_ME` placeholders).
-- Set MongoDB and RabbitMQ passwords (and the MongoDB replica-set keyfile)
-  before first deployment.
+- The chart ships no default passwords. `mongodb.auth.rootPassword`,
+  `mongodb.replicaSet.key`, `rabbitmq.auth.password` and
+  `rabbitmq.auth.erlangCookie` are empty and `helm template`/`install` fails
+  with a named error until you set them in `install-values.yaml`.
 - Configure TLS/SSL via cert-manager or a custom certificate.
 - RBAC is enabled by default (namespace-scoped Role/RoleBinding).
 

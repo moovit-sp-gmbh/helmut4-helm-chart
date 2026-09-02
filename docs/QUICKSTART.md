@@ -31,12 +31,14 @@ mongodb:
   auth:
     rootUsername: "root"
     rootPassword: "your-very-secure-password"
+  replicaSet:
+    key: "your-base64-keyfile"        # openssl rand -base64 32
 
 rabbitmq:
   auth:
     username: "root"
     password: "your-rabbit-password"
-    erlangCookie: "your-erlang-cookie"
+    erlangCookie: "your-erlang-cookie" # openssl rand -hex 32
     existingErlangCookieKey: "erlang-cookie"
     existingPasswordKey: "password"
 

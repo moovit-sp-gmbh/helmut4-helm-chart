@@ -1,0 +1,12 @@
+# Throwaway credentials so `helm lint`/`helm template` can render the chart
+# without real secrets. Never use these anywhere but CI.
+mongodb:
+  auth:
+    rootPassword: "ci-only-not-a-real-password"
+  replicaSet:
+    key: "Y2ktb25seS1yZXBsaWNhLXNldC1rZXktbm90LWEtc2VjcmV0"
+
+rabbitmq:
+  auth:
+    password: "ci-only-not-a-real-password"
+    erlangCookie: "ci-only-not-a-real-erlang-cookie"

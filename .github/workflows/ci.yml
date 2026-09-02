@@ -33,13 +33,13 @@ jobs:
         run: helm dependency update ./helmut4
 
       - name: helm lint (default values)
-        run: helm lint ./helmut4 --strict
+        run: helm lint ./helmut4 --strict -f helmut4/ci/lint-values.yaml
 
       - name: helm lint (each example)
         run: |
           for f in examples/values-*.yaml; do
             echo "=== linting against $f ==="
-            helm lint ./helmut4 -f "$f" --strict
+            helm lint ./helmut4 -f helmut4/ci/lint-values.yaml -f "$f" --strict
           done
 
       - name: helm-docs check (README.md matches values.yaml)
@@ -54,10 +54,10 @@ jobs:
         run: |
           set -e
           mkdir -p /tmp/rendered
-          helm template helmut4 ./helmut4 > /tmp/rendered/default.yaml
+          helm template helmut4 ./helmut4 -f helmut4/ci/lint-values.yaml > /tmp/rendered/default.yaml
           for f in examples/values-*.yaml; do
             name=$(basename "$f" .yaml)
-            helm template helmut4 ./helmut4 -f "$f" > "/tmp/rendered/${name}.yaml"
+            helm template helmut4 ./helmut4 -f helmut4/ci/lint-values.yaml -f "$f" > "/tmp/rendered/${name}.yaml"
           done
           for r in /tmp/rendered/*.yaml; do
             echo "=== kubeconform: $r ==="

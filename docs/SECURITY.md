@@ -31,6 +31,12 @@ kubectl create secret docker-registry my-creds   --docker-server=repo.moovit24.d
 
 ## 2. Database Credentials
 
+The chart ships no default passwords. `mongodb.auth.rootPassword`,
+`mongodb.replicaSet.key`, `rabbitmq.auth.password` and
+`rabbitmq.auth.erlangCookie` are empty in `helmut4/values.yaml`; the render
+fails with a named error until you set them in the gitignored
+`install-values.yaml`.
+
 ### Set MongoDB password
 
 ```yaml
@@ -39,6 +45,8 @@ mongodb:
   auth:
     rootUsername: "root"
     rootPassword: "super-secure-password"
+  replicaSet:
+    key: "your-base64-keyfile"        # openssl rand -base64 32
 ```
 
 ```bash
@@ -53,7 +61,7 @@ rabbitmq:
   auth:
     username: "root"
     password: "super-secure-password"
-    erlangCookie: "your-erlang-cookie"
+    erlangCookie: "your-erlang-cookie" # openssl rand -hex 32
 ```
 
 ## 3. RBAC (Role-Based Access Control)

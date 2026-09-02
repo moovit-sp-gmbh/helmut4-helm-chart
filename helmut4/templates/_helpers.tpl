@@ -137,3 +137,21 @@ MongoDB credentials password key
 password
 {{- end }}
 {{- end }}
+
+{{/*
+Fail the render when a credential that deliberately has no default is empty.
+Keeps blank passwords out of the cluster instead of silently deploying them.
+*/}}
+{{- define "helmut4.validateCredentials" -}}
+{{- $hint := "set it in your gitignored secrets values file (see install-values.yaml)" -}}
+{{- if .Values.mongodb.enabled -}}
+{{- if not .Values.mongodb.auth.existingSecret -}}
+{{- $_ := required (printf "mongodb.auth.rootPassword is required; %s" $hint) .Values.mongodb.auth.rootPassword -}}
+{{- end -}}
+{{- if .Values.mongodb.replicaSet.enabled -}}
+{{- $_ := required (printf "mongodb.replicaSet.key is required; %s" $hint) .Values.mongodb.replicaSet.key -}}
+{{- end -}}
+{{- end -}}
+{{- $_ := required (printf "rabbitmq.auth.password is required; %s" $hint) .Values.rabbitmq.auth.password -}}
+{{- $_ := required (printf "rabbitmq.auth.erlangCookie is required; %s" $hint) .Values.rabbitmq.auth.erlangCookie -}}
+{{- end }}

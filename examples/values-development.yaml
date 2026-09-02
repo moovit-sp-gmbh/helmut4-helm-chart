@@ -39,6 +39,7 @@ docker:
 mongodb:
   replicaSet:
     enabled: true
+    key: "CHANGE_ME_BASE64_6_TO_1024_CHARS"
   replicaCount: 1
   persistence:
     storageClass: "longhorn" # or "standard" / "local-path" for minikube/k3s
