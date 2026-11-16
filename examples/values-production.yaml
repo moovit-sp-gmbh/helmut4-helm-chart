@@ -75,12 +75,14 @@ mongodb:
       cpu: "4"
       memory: "8Gi"
 
-# RabbitMQ – single node (see helmut4/values.yaml for why we don't run a
-# cluster: HA in RabbitMQ 4.x needs quorum queues + persistence +
-# podAntiAffinity + PDB, and without all four a 3-node cluster has the
-# same failure mode as one node with more moving parts).
+# RabbitMQ – 3-node cluster on Longhorn block storage (chart default):
+# k8s peer discovery, quorum queues, podAntiAffinity, PDB. Survives the loss
+# of one pod / Kubernetes node.
 rabbitmq:
-  replicaCount: 1
+  replicaCount: 3
+  persistence:
+    storageClass: "longhorn" # or fast-ssd / managed-premium etc.
+    size: "8Gi"
   auth:
     username: "root"
     password: "CHANGE_ME"

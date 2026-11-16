@@ -61,7 +61,7 @@ kubectl exec -n helmut4 -it mongodb-0 -- mongosh -u root -p <password> --eval \
 ```bash
 # Scale to 5 replicas (set value in values.yaml, then helm upgrade)
 helm upgrade helmut4 ./helmut4 -n helmut4 -f install-values.yaml \
-  --set mongodb.replicaSet.replicaCount=5
+  --set mongodb.replicaSet.secondaries=4
 ```
 
 ## RabbitMQ StatefulSet
@@ -69,15 +69,35 @@ helm upgrade helmut4 ./helmut4 -n helmut4 -f install-values.yaml \
 ### Architecture
 
 - **Sub-chart**: `cloudpirates/rabbitmq v0.7.10`
-- **3 replicas** with automatic clustering
-- Erlang cookie for node authentication
-- WebStomp plugin (port 15674)
-- Persistent volumes (30 Gi default)
+- **3-node cluster** (`replicaCount: 3`), formed by k8s peer discovery
+  (`rabbitmq_peer_discovery_k8s`, pods listed through `rabbitmq-headless`)
+- `podManagementPolicy: Parallel`, so a full restart does not wait on pod-0
+- Erlang cookie for node authentication (`rabbitmq.auth.erlangCookie`)
+- Persistent volume per pod (8 Gi, Longhorn): cluster metadata and quorum
+  queue data survive pod restarts
+- Preferred podAntiAffinity on `kubernetes.io/hostname`, PDB with
+  `maxUnavailable: 1`
+- `cluster_partition_handling = pause_minority`, `default_queue_type = quorum`
+- WebStomp plugin (port 15674) for the browser and HC clients (`/ws`)
+
+### How Helmut4 uses the cluster
+
+- The Java services (`amqp`, `streams`) connect to the `rabbitmq` ClusterIP
+  Service (`SPRING_RABBITMQ_HOST`). The Service only routes to ready pods,
+  so a reconnect after a pod loss lands on a live node. They only declare
+  exchanges (`helmut`, `helmut.sc`), which are cluster-wide metadata.
+- The clients (HC, Helmut web, Helmut panel) subscribe over STOMP
+  (`/ws` → `rabbitmq:15674`) with exclusive queues. An exclusive queue lives
+  on the node the client is connected to. When that node dies the client
+  reconnects through the Service to another node and subscribes again,
+  usually within a few seconds. Live events published in that window are
+  lost, a stream request that was in flight fails and IO re-queues the job.
 
 ### DNS Names
 
 ```
-rabbitmq-0.rabbitmq-headless.helmut4.svc.cluster.local
+rabbitmq.helmut4.svc.cluster.local                       # clients, ready pods only
+rabbitmq-0.rabbitmq-headless.helmut4.svc.cluster.local   # cluster node names
 rabbitmq-1.rabbitmq-headless.helmut4.svc.cluster.local
 rabbitmq-2.rabbitmq-headless.helmut4.svc.cluster.local
 ```
@@ -85,24 +105,47 @@ rabbitmq-2.rabbitmq-headless.helmut4.svc.cluster.local
 ### Check Cluster Status
 
 ```bash
-kubectl exec -n helmut4 -it rabbitmq-0 -- rabbitmqctl cluster_status
+kubectl exec -n helmut4 -it rabbitmq-0 -- rabbitmq-diagnostics cluster_status
 kubectl exec -n helmut4 -it rabbitmq-0 -- rabbitmq-diagnostics ping
 kubectl exec -n helmut4 -it rabbitmq-0 -- rabbitmq-diagnostics status
 ```
+
+Use any running pod if `rabbitmq-0` is the one that is down.
 
 ### Management UI
 
 ```bash
 # Port-forwarding (management plugin enabled)
-kubectl port-forward -n helmut4 rabbitmq-0 15672:15672
+kubectl port-forward -n helmut4 svc/rabbitmq 15672:15672
 # UI: http://localhost:15672 — root / <password>
 ```
 
 ### Failover Behavior
 
-- **Leader election**: Automatic when leader fails
-- **Queue replication**: Queues are replicated automatically
-- **Message persistence**: Data on PVC, survives node crashes
+- **One pod / node lost**: the other two keep the majority and keep serving.
+  Clients reconnect through the `rabbitmq` Service. The pod restarts on its
+  PVC and rejoins the cluster.
+- **Two pods lost**: the remaining node pauses itself (`pause_minority`)
+  until a second node is back, so no split brain.
+- **Full restart**: all pods start in parallel and wait for each other.
+
+### Single node
+
+For dev / small installs set `rabbitmq.replicaCount: 1`,
+`rabbitmq.peerDiscoveryK8sPlugin.enabled: false`, `rabbitmq.pdb.create: false`
+and optionally `rabbitmq.persistence.enabled: false`
+(see `examples/values-development.yaml`).
+
+### Upgrading from the single-node chart
+
+`podManagementPolicy` and `volumeClaimTemplates` of a StatefulSet cannot be
+changed in place, so `helm upgrade` rejects the change. Delete the RabbitMQ
+StatefulSet first (the single-node pod had no PVC, there is no data to keep):
+
+```bash
+kubectl delete statefulset -n helmut4 rabbitmq
+helm upgrade helmut4 ./helmut4 -n helmut4 -f install-values.yaml
+```
 
 ## Backup and Restore
 

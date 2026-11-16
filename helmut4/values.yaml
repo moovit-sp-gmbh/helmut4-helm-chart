@@ -363,33 +363,34 @@ mongodb:
             targetPort: 27017
             protocol: TCP
 
-# -- Bundled cloudpirates/rabbitmq subchart. Single-node by design: a
-# multi-node RabbitMQ cluster only delivers HA when ALL of these are in
-# place:
-#   1. Quorum queues (`default_queue_type = quorum`) – classic mirrored
-#      queues were removed in RabbitMQ 4.0, so quorum (or streams) is the
-#      only replicated queue type left. This also requires the Helmut4
-#      services to either declare quorum queues explicitly or rely on the
-#      `default_queue_type` setting.
-#   2. Per-pod persistent storage – without it the Mnesia metadata and any
-#      quorum-queue Raft state are wiped on every pod restart.
-#   3. podAntiAffinity – otherwise multiple rabbitmq pods can land on the
-#      same Kubernetes node and a single node loss takes the cluster below
-#      quorum.
-#   4. A PodDisruptionBudget – to keep node drains from doing the same.
-# Without those four pieces a 3-node cluster shares topology (publish to
-# any node, consume from any node), but each message still lives on the
-# single node that owns its classic queue – so a node loss makes that
-# queue unavailable. Same failure mode as a single node, with more moving
-# parts and split-brain risk on top. Until those four pieces are added,
-# one node is more honest than three.
+# -- Bundled cloudpirates/rabbitmq subchart, run as a 3-node cluster so
+# Helmut4 survives the loss of one broker:
+#   1. k8s peer discovery forms the cluster, `pause_minority` stops a node
+#      that lost the majority (no split brain).
+#   2. Per-pod persistent storage keeps the cluster metadata (Khepri/Raft)
+#      and quorum queue data across pod restarts.
+#   3. podAntiAffinity spreads the pods over Kubernetes nodes, the PDB keeps
+#      node drains from taking more than one pod at a time.
+#   4. `default_queue_type = quorum`: durable queues are replicated. The
+#      Helmut4 services themselves only declare exchanges (replicated
+#      cluster metadata); the clients (HC, Helmut web/panel) subscribe with
+#      exclusive STOMP queues, which live on the node a client is connected
+#      to and are re-created when the client reconnects to another node.
+# The Java services connect through the `rabbitmq` ClusterIP Service, which
+# only routes to ready pods, and so does the `/ws` Ingress route.
+# For a dev / single-node install set `replicaCount: 1`,
+# `peerDiscoveryK8sPlugin.enabled: false` and `pdb.create: false`
+# (see examples/values-development.yaml).
 rabbitmq:
   # -- Subchart release name override (controls Service/StatefulSet names).
   fullnameOverride: "rabbitmq"
-  # -- Number of RabbitMQ pods. Keep at `1` until quorum queues +
-  # persistence + podAntiAffinity + PDB are all in place; see the
-  # block comment above for the reasoning.
-  replicaCount: 1
+  # -- Number of RabbitMQ pods. 3 tolerates the loss of one pod (majority
+  # 2 of 3). Use an odd number.
+  replicaCount: 3
+
+  # -- Start all pods at once. With `OrderedReady` a full restart can hang:
+  # pod-0 waits for peers that are only scheduled after it got ready.
+  podManagementPolicy: Parallel
 
   auth:
     # -- Internal RabbitMQ user used by the Spring microservices. The
@@ -411,12 +412,11 @@ rabbitmq:
     # -- Key inside the existing Secret that holds the password.
     existingPasswordKey: "password"
 
-  # -- K8s peer discovery is only meaningful in a multi-node cluster.
-  # Disabled for the single-node deployment so the pod does not waste
-  # cycles looking for peers it will never find.
+  # -- K8s peer discovery forms the cluster (lists the pods of the
+  # headless Service). Disable it for a single-node install.
   peerDiscoveryK8sPlugin:
     # -- Enable the rabbitmq_peer_discovery_k8s plugin.
-    enabled: false
+    enabled: true
     # -- Address type used to discover peers (`hostname` or `ip`).
     addressType: hostname
 
@@ -432,12 +432,39 @@ rabbitmq:
     # the WebSocket path, so a ClusterIP is enough.
     type: ClusterIP
 
-  # -- PVC settings for the RabbitMQ data directory. Disabled for the
-  # single-node deployment; flip to `enabled: true` (and add a real
-  # storageClass / size) before scaling out – see the block comment above
-  # this `rabbitmq` section.
+  # -- PVC per pod for the RabbitMQ data directory (cluster metadata and
+  # quorum queues). Block storage, like MongoDB – not the SMB share.
   persistence:
-    enabled: false
+    # -- Bind a PVC to each pod.
+    enabled: true
+    # -- StorageClass that backs the PVCs. Block storage only.
+    storageClass: "longhorn"
+    # -- Size of every pod's PVC.
+    size: "8Gi"
+    # -- PVC access modes.
+    accessModes:
+      - ReadWriteOnce
+
+  # -- Spread the RabbitMQ pods over Kubernetes nodes, so losing one node
+  # only takes one broker. Preferred (not required) so small clusters with
+  # fewer than 3 nodes can still schedule all pods.
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: rabbitmq
+
+  # -- PodDisruptionBudget for the RabbitMQ pods: a drain may only take one
+  # broker at a time.
+  pdb:
+    # -- Render the PodDisruptionBudget.
+    create: true
+    # -- Maximum number of unavailable RabbitMQ pods.
+    maxUnavailable: "1"
 
   metrics:
     # -- Enable the Prometheus exporter shipped with the subchart.
@@ -482,7 +509,11 @@ rabbitmq:
     # 1. `web_stomp.tcp.port = 15674` — the plugin default is also
     #    15674, but being explicit avoids surprises on plugin upgrades.
     #
-    # 2. The auth_backends chain. The Spring microservices authenticate
+    # 2. Cluster behaviour: `pause_minority` stops serving clients on a
+    #    node that lost the majority (no split brain), and durable queues
+    #    default to replicated quorum queues.
+    #
+    # 3. The auth_backends chain. The Spring microservices authenticate
     #    against the internal user (`auth.username`/`auth.password`
     #    above). The Helmut panel's STOMP-over-WS connection uses the
     #    logged-in panel user's credentials, which don't exist in
@@ -494,6 +525,9 @@ rabbitmq:
     #    behaves like the canonical docker-compose deployment.
     extraConfiguration: |
       web_stomp.tcp.port = 15674
+
+      cluster_partition_handling = pause_minority
+      default_queue_type = quorum
 
       auth_backends.1 = internal
       auth_backends.2 = rabbit_auth_backend_http

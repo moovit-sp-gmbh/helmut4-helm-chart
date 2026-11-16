@@ -91,11 +91,12 @@ so the Java driver enters REPLICA_SET topology mode and finds the primary.
 {{- end }}
 
 {{/*
-RabbitMQ host (pod-0 of headless service, FQDN)
+RabbitMQ host: the ClusterIP Service (FQDN). It only routes to ready pods, so
+a new connection never lands on a dead cluster node.
 */}}
 {{- define "helmut4.rabbitmq.host" -}}
 {{- $name := .Values.rabbitmq.fullnameOverride | default "rabbitmq" }}
-{{- printf "%s-0.%s-headless.%s.svc.cluster.local" $name $name .Values.namespace }}
+{{- printf "%s.%s.svc.cluster.local" $name .Values.namespace }}
 {{- end }}
 
 {{/*

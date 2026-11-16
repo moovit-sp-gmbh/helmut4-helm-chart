@@ -55,9 +55,15 @@ mongodb:
       cpu: "500m"
       memory: "1Gi"
 
-# RabbitMQ – single node for dev
+# RabbitMQ – single node for dev (no cluster, no PVC, no PDB)
 rabbitmq:
   replicaCount: 1
+  peerDiscoveryK8sPlugin:
+    enabled: false
+  persistence:
+    enabled: false
+  pdb:
+    create: false
   auth:
     username: "root"
     password: "dev-password"
