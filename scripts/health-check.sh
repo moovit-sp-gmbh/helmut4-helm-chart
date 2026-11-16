@@ -38,8 +38,8 @@ check_component() {
 echo -e "\n${YELLOW}Pod Status:${NC}"
 check_component "MongoDB pods (>=1 Running)" \
   "kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=mongodb --no-headers 2>/dev/null | grep -q Running"
-check_component "RabbitMQ pod (Running)" \
-  "kubectl get pod -n $NAMESPACE rabbitmq-0 --no-headers 2>/dev/null | grep -q Running"
+check_component "RabbitMQ pods (>=1 Running)" \
+  "kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=rabbitmq --no-headers 2>/dev/null | grep -q Running"
 check_component "hw service pod (Running)" \
   "kubectl get pods -n $NAMESPACE -l app=hw --no-headers 2>/dev/null | grep -q Running"
 
@@ -58,8 +58,16 @@ else
   echo "(skipping MongoDB connectivity — no password resolved)"
 fi
 
-check_component "RabbitMQ responds to ping" \
-  "kubectl exec -n $NAMESPACE rabbitmq-0 -- rabbitmq-diagnostics ping 2>/dev/null | grep -q 'It is running'"
+# any running pod: rabbitmq-0 may be the one that is down
+RABBITMQ_POD="$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=rabbitmq \
+  --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
+RABBITMQ_REPLICAS="$(kubectl get statefulset -n "$NAMESPACE" rabbitmq -o jsonpath='{.spec.replicas}' 2>/dev/null)"
+check_component "RabbitMQ node is running" \
+  "kubectl exec -n $NAMESPACE ${RABBITMQ_POD:-rabbitmq-0} -c rabbitmq -- rabbitmq-diagnostics -q check_running >/dev/null 2>&1"
+RABBITMQ_RUNNING="$(kubectl exec -n "$NAMESPACE" "${RABBITMQ_POD:-rabbitmq-0}" -c rabbitmq -- \
+  rabbitmqctl -q eval 'length(rabbit_nodes:list_running()).' 2>/dev/null | tr -d '[:space:]')"
+check_component "RabbitMQ cluster: ${RABBITMQ_RUNNING:-?}/${RABBITMQ_REPLICAS:-?} nodes running" \
+  "[ -n '$RABBITMQ_RUNNING' ] && [ '$RABBITMQ_RUNNING' = '${RABBITMQ_REPLICAS:-1}' ]"
 
 # --- Storage ----------------------------------------------------------------
 echo -e "\n${YELLOW}Storage:${NC}"

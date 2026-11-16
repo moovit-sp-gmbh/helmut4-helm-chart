@@ -28,11 +28,13 @@
 ### 3. RabbitMQ StatefulSet (sub-chart)
 
 - `cloudpirates/rabbitmq v0.7.10` as Helm dependency
-- 3 replicas for clustering
-- Persistent volumes (30 Gi default)
+- 3-node cluster, k8s peer discovery, `podManagementPolicy: Parallel`
+- Persistent volume per pod (8 Gi, Longhorn)
 - Erlang cookie for node authentication
+- podAntiAffinity (preferred) and PodDisruptionBudget (`maxUnavailable: 1`)
+- `pause_minority` partition handling, quorum as default queue type
 - WebStomp plugin (port 15674)
-- Headless service for clustering
+- Headless service for clustering, ClusterIP `rabbitmq` for clients
 - Health checks
 
 ### 4. Application Storage (SMB CSI)
@@ -133,7 +135,7 @@ helmut4-helm-chart/
 | Component | Replicas | Storage | StorageClass |
 |-----------|----------|---------|--------------|
 | MongoDB | 3 | 50 Gi x3 | longhorn |
-| RabbitMQ | 3 | 30 Gi | default |
+| RabbitMQ | 3 | 8 Gi x3 | longhorn |
 | Helmut Storage | — | 100 Gi | helmut4-csi-storage (SMB) |
 | MongoDB Backup | — | 50 Gi | helmut4-csi-storage (SMB) |
 | Services | 2 | — | — |

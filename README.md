@@ -15,7 +15,7 @@ A complete Helm chart for the Helmut4 microservices application — MongoDB repl
 
 - **Ingress / Gateway API routing**: Path-based routing for all services, including STOMP-over-WebSocket on `/ws`. Works with any Ingress controller (defaults tuned for ingress-nginx) or, opt-in, a Gateway API HTTPRoute.
 - **MongoDB Replica Set**: 3-node RS (`rs0`) via `cloudpirates/mongodb v0.10.3`, with all seeds wired into the Spring driver
-- **RabbitMQ**: single-node deployment by default (see [helmut4/values.yaml](helmut4/values.yaml) for the four pieces an HA cluster needs)
+- **RabbitMQ Cluster**: 3-node cluster via `cloudpirates/rabbitmq v0.7.10` (k8s peer discovery, quorum queues, PVC per pod, podAntiAffinity, PDB); survives the loss of one broker (see [docs/HA-DATABASE.md](docs/HA-DATABASE.md))
 - **Longhorn Block Storage**: MongoDB PVCs on Longhorn (50 Gi per replica)
 - **SMB / NFS CSI Driver Support**: multi-volume list for application file storage and any additional shares (e.g. backups)
 - **Private Registry Credentials**: Docker Registry authentication integrated
@@ -429,6 +429,7 @@ kubectl exec -n helmut4 -it mongodb-0 -- mongosh \
 
 ```bash
 kubectl exec -n helmut4 -it rabbitmq-0 -- rabbitmq-diagnostics ping
+kubectl exec -n helmut4 -it rabbitmq-0 -- rabbitmq-diagnostics cluster_status
 ```
 
 ### Ingress / HTTPRoute not working
